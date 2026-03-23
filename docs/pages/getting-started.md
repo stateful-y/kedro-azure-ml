@@ -105,23 +105,28 @@ jobs:
       tags: ["training"]
 ```
 
-## Submit to Azure ML
+## Run on Azure ML
 
 ```bash
-kedro azureml submit -j training
+kedro azureml run -j training
 ```
 
 Useful flags:
 
 | Flag | Description |
 |---|---|
-| `--dry-run` | Preview what would be submitted without calling Azure ML |
+| `--dry-run` | Preview what would be run without calling Azure ML |
 | `--wait-for-completion` | Block until the pipeline run completes |
-| `--once` | Force an immediate run even if the job has a schedule |
-| `-w <name>` | Override the workspace for this submission |
+| `-w <name>` | Override the workspace for this run |
 | `--aml-env <env>` | Override the Azure ML environment |
 | `--params '{"key": "value"}'` | Pass runtime parameters as JSON |
 | `--env-var KEY=VALUE` | Inject environment variables into pipeline steps |
+
+To create or update a persistent schedule instead:
+
+```bash
+kedro azureml schedule -j training
+```
 
 ## Compile to YAML
 

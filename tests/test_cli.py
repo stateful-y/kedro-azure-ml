@@ -134,8 +134,8 @@ class TestExecute:
             assert result.exit_code == 0
 
 
-class TestSubmit:
-    """Tests for the ``kedro azureml submit`` CLI command."""
+class TestRun:
+    """Tests for the ``kedro azureml run`` CLI command."""
 
     @pytest.mark.parametrize(
         "aml_env",
@@ -217,8 +217,8 @@ class TestSubmit:
 
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
-                ["--once", "-j", "test_job"]
+                cli.run,
+                ["-j", "test_job"]
                 + (["--aml-env", aml_env] if aml_env else [])
                 + (["--wait-for-completion"] if wait_for_completion else [])
                 + (sum([["--env-var", k] for k in extra_env[0]], [])),
@@ -294,11 +294,11 @@ class TestSubmit:
             patch("tests.helpers.on_job_scheduled_helper.existing_function") as mock_callback,
         ):
             runner = CliRunner()
-            args = ["-j", "test_job", "--once"]
+            args = ["-j", "test_job"]
             if on_job_scheduled_arg:
                 args += ["--on-job-scheduled", on_job_scheduled_arg]
 
-            result = runner.invoke(cli.submit, args, obj=cli_context)
+            result = runner.invoke(cli.run, args, obj=cli_context)
             assert result.exit_code == 0, result.output
 
             if on_job_scheduled_arg:
@@ -323,7 +323,7 @@ class TestSubmit:
         with patch.object(Path, "cwd", return_value=tmp_path):
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
+                cli.run,
                 ["-j", "any_job", "--on-job-scheduled", on_job_scheduled_arg],
                 obj=cli_context,
             )
@@ -369,9 +369,9 @@ class TestSubmit:
             patch("click.confirm", return_value=confirm) as click_confirm,
         ):
             runner = CliRunner()
-            result = runner.invoke(cli.submit, ["-j", "any_job"], obj=cli_context)
+            result = runner.invoke(cli.run, ["-j", "any_job"], obj=cli_context)
             assert result.exit_code == (1 if confirm else 2), (
-                "submit should have exited with code: 1 if confirmed, 2 if stopped"
+                "run should have exited with code: 1 if confirmed, 2 if stopped"
             )
             click_confirm.assert_called_once()
 
@@ -422,10 +422,9 @@ class TestSubmit:
                     "azureml",
                     "-e",
                     "base",
-                    "submit",
+                    "run",
                     "-j",
                     "test_job",
-                    "--once",
                 ],
                 obj=ProjectMetadata(
                     tmp_path,
@@ -460,6 +459,6 @@ class TestSubmit:
             ml_client.jobs.stream.side_effect = ValueError()
 
             runner = CliRunner()
-            result = runner.invoke(cli.submit, ["-j", "any_job", "--env-var", env_var], obj=cli_context)
+            result = runner.invoke(cli.run, ["-j", "any_job", "--env-var", env_var], obj=cli_context)
             assert result.exit_code == 1
             assert str(result.exception) == f"Invalid env-var: {env_var}, expected format: KEY=VALUE"

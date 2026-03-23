@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -311,20 +312,16 @@ def compile_job_pipelines(
             click.echo(f"Compiled job '{job_name}' to {dest}")
 
 
-def submit_scheduled_jobs(
+@contextmanager
+def _prepare_jobs(
     ctx: CliContext,
     aml_env: str | None,
     params: str,
     extra_env: dict[str, str],
     load_versions: dict[str, str],
     job_names: list[str] | None,
-    dry_run: bool,
-    once: bool = False,
-    wait_for_completion: bool = False,
-    on_job_scheduled: Callable | None = None,
-    workspace_override: str | None = None,
 ):
-    """Submit jobs defined in the ``jobs`` section of ``azureml.yml``.
+    """Context manager that loads config, validates jobs, and generates pipelines.
 
     Parameters
     ----------
@@ -339,37 +336,21 @@ def submit_scheduled_jobs(
     load_versions : dict of str to str
         Dataset version overrides.
     job_names : list of str or None
-        If given, only submit these jobs.
-    dry_run : bool
-        Preview mode: print what would happen without calling Azure ML.
-    once : bool
-        Force immediate run even when a schedule is configured.
-    wait_for_completion : bool
-        Block until the pipeline run completes.
-    on_job_scheduled : callable or None
-        Callback invoked after each job is scheduled.
-    workspace_override : str or None
-        Named workspace override for all jobs in this batch.
+        If given, only prepare these jobs.
 
-    Returns
-    -------
-    bool
-        ``True`` if all jobs were submitted successfully.
+    Yields
+    ------
+    tuple
+        ``(config, selected_jobs, prepared)`` where *prepared* is a dict
+        mapping job names to ``(job_experiment_name, pipeline_job, job_config)``
+        tuples.
     """
-    from kedro_azure_ml.client import AzureMLPipelinesClient
-    from kedro_azure_ml.scheduler import (
-        AzureMLScheduleClient,
-        build_job_schedule,
-        build_trigger,
-        resolve_schedule,
-    )
-
     with KedroContextManager(env=ctx.env, runtime_params=parse_runtime_params(params, True)) as mgr:
         config = mgr.plugin_config
 
         if not config.jobs:
             raise click.ClickException(
-                "No 'jobs' section found in azureml.yml config. Define jobs to use the submit command."
+                "No 'jobs' section found in azureml.yml config. Define jobs to use this command."
             )
 
         selected_jobs = config.jobs
@@ -382,124 +363,244 @@ def submit_scheduled_jobs(
                 )
             selected_jobs = {k: v for k, v in config.jobs.items() if k in job_names}
 
-        schedule_client = AzureMLScheduleClient()
-        results: dict[str, bool] = {}
-
         # Read default experiment name from mlflow.yml
         default_experiment_name = _read_mlflow_experiment_name(mgr)
 
+        prepared: dict[str, tuple] = {}
         for job_name, job_config in selected_jobs.items():
+            job_experiment_name = job_config.experiment_name or default_experiment_name
+            mlflow_run_name = job_config.display_name or job_name
+
+            pipeline_opts = job_config.pipeline
+            generator = AzureMLPipelineGenerator(
+                pipeline_opts.pipeline_name,
+                ctx.env,
+                config,
+                mgr.context.params,
+                mgr.context.catalog,
+                aml_env,
+                params,
+                extra_env=extra_env,
+                load_versions=load_versions,
+                filter_options=pipeline_opts,
+                mlflow_run_name=mlflow_run_name,
+                experiment_name=job_experiment_name,
+            )
+            pipeline_job = generator.generate()
+
+            if job_config.display_name:
+                pipeline_job.display_name = job_config.display_name
+
+            prepared[job_name] = (job_experiment_name, pipeline_job, job_config)
+
+        yield config, selected_jobs, prepared
+
+
+def run_jobs(
+    ctx: CliContext,
+    aml_env: str | None,
+    params: str,
+    extra_env: dict[str, str],
+    load_versions: dict[str, str],
+    job_names: list[str] | None,
+    dry_run: bool,
+    wait_for_completion: bool = False,
+    on_job_scheduled: Callable | None = None,
+    workspace_override: str | None = None,
+):
+    """Run jobs immediately, ignoring any configured schedule.
+
+    Parameters
+    ----------
+    ctx : CliContext
+        CLI context containing the Kedro environment and metadata.
+    aml_env : str or None
+        Azure ML Environment override.
+    params : str
+        Runtime parameters override as a JSON string.
+    extra_env : dict of str to str
+        Extra environment variables to inject into steps.
+    load_versions : dict of str to str
+        Dataset version overrides.
+    job_names : list of str or None
+        If given, only run these jobs.
+    dry_run : bool
+        Preview mode: print what would happen without calling Azure ML.
+    wait_for_completion : bool
+        Block until the pipeline run completes.
+    on_job_scheduled : callable or None
+        Callback invoked after each job is submitted.
+    workspace_override : str or None
+        Named workspace override for all jobs in this batch.
+
+    Returns
+    -------
+    bool
+        ``True`` if all jobs ran successfully.
+    """
+    from kedro_azure_ml.client import AzureMLPipelinesClient
+
+    with _prepare_jobs(ctx, aml_env, params, extra_env, load_versions, job_names) as (
+        config,
+        selected_jobs,
+        prepared,
+    ):
+        results: dict[str, bool] = {}
+
+        for job_name in selected_jobs:
             try:
-                # Resolve workspace: CLI override > job-level > __default__
+                job_experiment_name, pipeline_job, job_config = prepared[job_name]
                 workspace = config.workspace.resolve(workspace_override or job_config.workspace)
-
-                # Resolve experiment name: job-level override > mlflow.yml
-                job_experiment_name = job_config.experiment_name or default_experiment_name
-                mlflow_run_name = job_config.display_name or job_name
-
-                # Generate pipeline job
                 pipeline_opts = job_config.pipeline
-                generator = AzureMLPipelineGenerator(
-                    pipeline_opts.pipeline_name,
-                    ctx.env,
-                    config,
-                    mgr.context.params,
-                    mgr.context.catalog,
-                    aml_env,
-                    params,
-                    extra_env=extra_env,
-                    load_versions=load_versions,
-                    filter_options=pipeline_opts,
-                    mlflow_run_name=mlflow_run_name,
-                    experiment_name=job_experiment_name,
-                )
-                pipeline_job = generator.generate()
 
-                if job_config.display_name:
-                    pipeline_job.display_name = job_config.display_name
-
-                # Decide: schedule or immediate run
-                has_schedule = job_config.schedule is not None
-                run_immediately = once or not has_schedule
-
-                if run_immediately:
-                    # Immediate run via AzureMLPipelinesClient
-                    if dry_run:
-                        click.echo(
-                            f"[DRY RUN] Would run job '{job_name}' immediately "
-                            f"(pipeline '{pipeline_opts.pipeline_name}')"
-                        )
-                        results[job_name] = True
-                    else:
-                        job_callback = on_job_scheduled or default_job_callback
-                        az_client = AzureMLPipelinesClient(pipeline_job)
-                        is_ok = az_client.run(
-                            workspace,
-                            config.compute,
-                            wait_for_completion=wait_for_completion,
-                            on_job_scheduled=job_callback,
-                            compute_name=job_config.compute,
-                            experiment_name=job_experiment_name,
-                        )
-                        if is_ok:
-                            click.echo(
-                                click.style(
-                                    f"Job '{job_name}' submitted for immediate execution",
-                                    fg="green",
-                                )
-                            )
-                        results[job_name] = is_ok
-                else:
-                    # Persistent schedule
-                    schedule_cfg = resolve_schedule(job_config.schedule, config.schedules)
-                    trigger = build_trigger(schedule_cfg)
-
-                    job_schedule = build_job_schedule(
-                        name=job_name,
-                        trigger=trigger,
-                        pipeline_job=pipeline_job,
-                        display_name=job_config.display_name,
-                        description=job_config.description,
+                if dry_run:
+                    click.echo(
+                        f"[DRY RUN] Would run job '{job_name}' immediately (pipeline '{pipeline_opts.pipeline_name}')"
                     )
-
-                    if dry_run:
-                        trigger_desc = (
-                            f"cron: {schedule_cfg.cron.expression}"
-                            if schedule_cfg.cron
-                            else f"recurrence: every {schedule_cfg.recurrence.interval} {schedule_cfg.recurrence.frequency}(s)"
-                        )
-                        click.echo(
-                            f"[DRY RUN] Would create schedule '{job_name}' "
-                            f"({trigger_desc}) "
-                            f"for pipeline '{pipeline_opts.pipeline_name}'"
-                        )
-                        results[job_name] = True
-                    else:
-                        result = schedule_client.create_or_update_schedule(
-                            job_schedule,
-                            workspace,
-                        )
+                    results[job_name] = True
+                else:
+                    job_callback = on_job_scheduled or default_job_callback
+                    az_client = AzureMLPipelinesClient(pipeline_job)
+                    is_ok = az_client.run(
+                        workspace,
+                        config.compute,
+                        wait_for_completion=wait_for_completion,
+                        on_job_scheduled=job_callback,
+                        compute_name=job_config.compute,
+                        experiment_name=job_experiment_name,
+                    )
+                    if is_ok:
                         click.echo(
                             click.style(
-                                f"Schedule '{result.name}' created/updated successfully",
+                                f"Job '{job_name}' submitted for immediate execution",
                                 fg="green",
                             )
                         )
-                        results[job_name] = True
+                    results[job_name] = is_ok
 
             except Exception as e:
-                click.echo(
-                    click.style(
-                        f"Failed to submit job '{job_name}': {e}",
-                        fg="red",
-                    )
-                )
-                logger.exception(f"Error submitting job '{job_name}'")
+                click.echo(click.style(f"Failed to run job '{job_name}': {e}", fg="red"))
+                logger.exception(f"Error running job '{job_name}'")
                 results[job_name] = False
 
-        # Summary
         succeeded = sum(1 for v in results.values() if v)
         failed = sum(1 for v in results.values() if not v)
-        click.echo(f"\nSubmit summary: {succeeded} succeeded, {failed} failed (out of {len(results)} jobs)")
+        click.echo(f"\nRun summary: {succeeded} succeeded, {failed} failed (out of {len(results)} jobs)")
+
+        return all(results.values())
+
+
+def schedule_jobs(
+    ctx: CliContext,
+    aml_env: str | None,
+    params: str,
+    extra_env: dict[str, str],
+    load_versions: dict[str, str],
+    job_names: list[str] | None,
+    dry_run: bool,
+    workspace_override: str | None = None,
+):
+    """Create or update persistent Azure ML schedules for jobs.
+
+    Every selected job must have a ``schedule`` configured; otherwise
+    a ``ClickException`` is raised.
+
+    Parameters
+    ----------
+    ctx : CliContext
+        CLI context containing the Kedro environment and metadata.
+    aml_env : str or None
+        Azure ML Environment override.
+    params : str
+        Runtime parameters override as a JSON string.
+    extra_env : dict of str to str
+        Extra environment variables to inject into steps.
+    load_versions : dict of str to str
+        Dataset version overrides.
+    job_names : list of str or None
+        If given, only schedule these jobs.
+    dry_run : bool
+        Preview mode: print what would happen without calling Azure ML.
+    workspace_override : str or None
+        Named workspace override for all jobs in this batch.
+
+    Returns
+    -------
+    bool
+        ``True`` if all schedules were created/updated successfully.
+    """
+    from kedro_azure_ml.scheduler import (
+        AzureMLScheduleClient,
+        build_job_schedule,
+        build_trigger,
+        resolve_schedule,
+    )
+
+    with _prepare_jobs(ctx, aml_env, params, extra_env, load_versions, job_names) as (
+        config,
+        selected_jobs,
+        prepared,
+    ):
+        # Validate that all selected jobs have a schedule configured
+        missing_schedule = [name for name, cfg in selected_jobs.items() if cfg.schedule is None]
+        if missing_schedule:
+            raise click.ClickException(
+                f"Job(s) have no schedule configured: {', '.join(sorted(missing_schedule))}. "
+                f"Add a schedule to the job config or use 'kedro azureml run' instead."
+            )
+
+        schedule_client = AzureMLScheduleClient()
+        results: dict[str, bool] = {}
+
+        for job_name in selected_jobs:
+            try:
+                job_experiment_name, pipeline_job, job_config = prepared[job_name]
+                workspace = config.workspace.resolve(workspace_override or job_config.workspace)
+                pipeline_opts = job_config.pipeline
+
+                schedule_cfg = resolve_schedule(job_config.schedule, config.schedules)
+                trigger = build_trigger(schedule_cfg)
+
+                job_schedule = build_job_schedule(
+                    name=job_name,
+                    trigger=trigger,
+                    pipeline_job=pipeline_job,
+                    display_name=job_config.display_name,
+                    description=job_config.description,
+                )
+
+                if dry_run:
+                    trigger_desc = (
+                        f"cron: {schedule_cfg.cron.expression}"
+                        if schedule_cfg.cron
+                        else f"recurrence: every {schedule_cfg.recurrence.interval} {schedule_cfg.recurrence.frequency}(s)"
+                    )
+                    click.echo(
+                        f"[DRY RUN] Would create schedule '{job_name}' "
+                        f"({trigger_desc}) "
+                        f"for pipeline '{pipeline_opts.pipeline_name}'"
+                    )
+                    results[job_name] = True
+                else:
+                    result = schedule_client.create_or_update_schedule(
+                        job_schedule,
+                        workspace,
+                    )
+                    click.echo(
+                        click.style(
+                            f"Schedule '{result.name}' created/updated successfully",
+                            fg="green",
+                        )
+                    )
+                    results[job_name] = True
+
+            except Exception as e:
+                click.echo(click.style(f"Failed to schedule job '{job_name}': {e}", fg="red"))
+                logger.exception(f"Error scheduling job '{job_name}'")
+                results[job_name] = False
+
+        succeeded = sum(1 for v in results.values() if v)
+        failed = sum(1 for v in results.values() if not v)
+        click.echo(f"\nSchedule summary: {succeeded} succeeded, {failed} failed (out of {len(results)} jobs)")
 
         return all(results.values())

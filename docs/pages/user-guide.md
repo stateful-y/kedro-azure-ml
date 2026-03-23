@@ -108,26 +108,57 @@ Creates `conf/base/azureml.yml` (with placeholder values) and `.amlignore`.
 ### `kedro azureml compile`
 
 ```text
-kedro azureml compile -j JOB_NAME [-o OUTPUT] [--params JSON] [--env-var KEY=VALUE] [--aml-env ENV]
+kedro azureml compile -j JOB_NAME [-o OUTPUT] [--params JSON] [--env-var KEY=VALUE] [--aml-env ENV] [--load-versions KEY:VERSION]
 ```
 
 Compiles named job(s) into Azure ML pipeline YAML definitions. Accepts multiple `-j` flags.
 
-### `kedro azureml submit`
+| Flag | Description |
+|---|---|
+| `-j JOB_NAME` | Job name from the `jobs` config section (required, repeatable) |
+| `-o OUTPUT` | Output YAML file path (default: `pipeline.yaml`) |
+| `--aml-env ENV` | Override the Azure ML environment |
+| `--params JSON` | Runtime parameters as a JSON string |
+| `--env-var KEY=VALUE` | Inject environment variables into steps (repeatable) |
+| `--load-versions KEY:VERSION` | Dataset version overrides |
+
+### `kedro azureml run`
 
 ```text
-kedro azureml submit -j JOB_NAME [--dry-run] [--once] [--wait-for-completion] [-w WORKSPACE] [--aml-env ENV] [--params JSON] [--env-var KEY=VALUE] [--on-job-scheduled MODULE:FUNC]
+kedro azureml run -j JOB_NAME [--dry-run] [--wait-for-completion] [-w WORKSPACE] [--aml-env ENV] [--params JSON] [--env-var KEY=VALUE] [--load-versions KEY:VERSION] [--on-job-scheduled MODULE:FUNC]
 ```
 
-Submits named job(s) to Azure ML. Jobs with schedules create persistent Azure ML schedules; jobs without schedules run immediately.
+Runs named job(s) immediately on Azure ML, ignoring any configured schedule.
 
 | Flag | Description |
 |---|---|
-| `--dry-run` | Preview without submitting |
-| `--once` | Force immediate run even if a schedule is configured |
+| `-j JOB_NAME` | Job name from the `jobs` config section (required, repeatable) |
+| `--dry-run` | Preview without running |
 | `--wait-for-completion` | Block until the run completes |
 | `-w WORKSPACE` | Override workspace for all jobs in this batch |
-| `--on-job-scheduled MODULE:FUNC` | Callback invoked after each job is scheduled |
+| `--aml-env ENV` | Override the Azure ML environment |
+| `--params JSON` | Runtime parameters as a JSON string |
+| `--env-var KEY=VALUE` | Inject environment variables into steps (repeatable) |
+| `--load-versions KEY:VERSION` | Dataset version overrides |
+| `--on-job-scheduled MODULE:FUNC` | Callback invoked after each job is submitted |
+
+### `kedro azureml schedule`
+
+```text
+kedro azureml schedule -j JOB_NAME [--dry-run] [-w WORKSPACE] [--aml-env ENV] [--params JSON] [--env-var KEY=VALUE] [--load-versions KEY:VERSION]
+```
+
+Creates or updates persistent Azure ML schedules for named job(s). Every selected job must have a `schedule` configured in `azureml.yml`.
+
+| Flag | Description |
+|---|---|
+| `-j JOB_NAME` | Job name from the `jobs` config section (required, repeatable) |
+| `--dry-run` | Preview without creating schedules |
+| `-w WORKSPACE` | Override workspace for all jobs in this batch |
+| `--aml-env ENV` | Override the Azure ML environment |
+| `--params JSON` | Runtime parameters as a JSON string |
+| `--env-var KEY=VALUE` | Inject environment variables into steps (repeatable) |
+| `--load-versions KEY:VERSION` | Dataset version overrides |
 
 ### `kedro azureml execute` (internal)
 
@@ -259,10 +290,10 @@ jobs:
     workspace: "staging"
 ```
 
-You can also override the workspace at submit time:
+You can also override the workspace at run time:
 
 ```bash
-kedro azureml submit -j training -w staging
+kedro azureml run -j training -w staging
 ```
 
 ## Environment variables
@@ -270,7 +301,7 @@ kedro azureml submit -j training -w staging
 Inject environment variables into Azure ML pipeline steps:
 
 ```bash
-kedro azureml submit -j training --env-var API_KEY=secret --env-var DEBUG=1
+kedro azureml run -j training --env-var API_KEY=secret --env-var DEBUG=1
 ```
 
 ## Troubleshooting

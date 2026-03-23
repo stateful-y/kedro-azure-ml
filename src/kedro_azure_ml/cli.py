@@ -16,7 +16,8 @@ from kedro_azure_ml.cli_functions import (
     dynamic_import_job_schedule_func_from_str,
     parse_extra_env_params,
     parse_runtime_params,
-    submit_scheduled_jobs,
+    run_jobs,
+    schedule_jobs,
     verify_configuration_directory_for_azure,
     warn_about_ignore_files,
 )
@@ -194,12 +195,6 @@ def compile(
     help="Preview what would be submitted without actually calling Azure ML.",
 )
 @click.option(
-    "--once",
-    is_flag=True,
-    default=False,
-    help="Force immediate run even if the job has a schedule configured.",
-)
-@click.option(
     "--wait-for-completion",
     is_flag=True,
     default=False,
@@ -210,11 +205,11 @@ def compile(
     type=str,
     default=None,
     callback=dynamic_import_job_schedule_func_from_str,
-    help="Callback function invoked after each job is scheduled, format: path.to.module:function_name",
+    help="Callback function invoked after each job is submitted, format: path.to.module:function_name",
 )
 @click.pass_obj
 @click.pass_context
-def submit(
+def run(
     click_context: click.Context,
     ctx: CliContext,
     workspace_name: str | None,
@@ -224,18 +219,13 @@ def submit(
     env_var: tuple[str],
     load_versions: dict[str, str],
     dry_run: bool,
-    once: bool,
     wait_for_completion: bool,
     on_job_scheduled: Callable | None,
 ):
-    """Submit named jobs to Azure ML.
+    """Run named jobs immediately on Azure ML.
 
-    Jobs are defined in the 'jobs' section of azureml.yml. Each job specifies
-    its pipeline, optional schedule, display name, compute, and experiment.
-
-    Jobs with a schedule create persistent Azure ML schedules; jobs without
-    a schedule run immediately. Use --once to force an immediate run even
-    when a schedule is configured.
+    Jobs are defined in the 'jobs' section of azureml.yml. Each job runs
+    once immediately, ignoring any configured schedule.
     """
     params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
 
@@ -250,7 +240,7 @@ def submit(
 
     extra_env = parse_extra_env_params(env_var)
 
-    is_ok = submit_scheduled_jobs(
+    is_ok = run_jobs(
         ctx=ctx,
         aml_env=aml_env,
         params=params,
@@ -258,17 +248,117 @@ def submit(
         load_versions=load_versions,
         job_names=list(job_names),
         dry_run=dry_run,
-        once=once,
         wait_for_completion=wait_for_completion,
         on_job_scheduled=on_job_scheduled,
         workspace_override=workspace_name,
     )
 
     if is_ok:
-        click.echo(click.style("All jobs submitted successfully", fg="green"))
+        click.echo(click.style("All jobs ran successfully", fg="green"))
         click_context.exit(0)
     else:
-        click.echo(click.style("Some jobs failed to submit", fg="red"))
+        click.echo(click.style("Some jobs failed to run", fg="red"))
+        click_context.exit(1)
+
+
+@azureml_group.command()
+@click.option(
+    "-w",
+    "--workspace",
+    "workspace_name",
+    type=str,
+    default=None,
+    help="Named workspace from config to use for all jobs in this batch.",
+)
+@click.option(
+    "--azureml-environment",
+    "--aml-env",
+    "aml_env",
+    type=str,
+    help="Azure ML Environment to use for pipeline execution.",
+)
+@click.option(
+    "-j",
+    "--job",
+    "job_names",
+    type=str,
+    multiple=True,
+    required=True,
+    help="Name(s) of job(s) from the 'jobs' config section.",
+)
+@click.option(
+    "--params",
+    "params",
+    type=str,
+    help="Parameters override in form of JSON string",
+)
+@click.option(
+    "--env-var",
+    type=str,
+    multiple=True,
+    help="Environment variables to be injected in the steps, format: KEY=VALUE",
+)
+@click.option(
+    "--load-versions",
+    "-lv",
+    type=str,
+    default="",
+    help=LOAD_VERSION_HELP,
+    callback=_split_load_versions,
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Preview what would be scheduled without actually calling Azure ML.",
+)
+@click.pass_obj
+@click.pass_context
+def schedule(
+    click_context: click.Context,
+    ctx: CliContext,
+    workspace_name: str | None,
+    aml_env: str | None,
+    job_names: tuple[str],
+    params: str,
+    env_var: tuple[str],
+    load_versions: dict[str, str],
+    dry_run: bool,
+):
+    """Create or update persistent Azure ML schedules for named jobs.
+
+    Jobs are defined in the 'jobs' section of azureml.yml. Each job must
+    have a schedule configured; an error is raised otherwise.
+    """
+    params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
+
+    if workspace_name:
+        click.echo(f"Overriding workspace to: {workspace_name}")
+
+    if aml_env:
+        click.echo(f"Overriding Azure ML Environment to: {aml_env}")
+
+    warn_about_ignore_files()
+    verify_configuration_directory_for_azure(click_context, ctx)
+
+    extra_env = parse_extra_env_params(env_var)
+
+    is_ok = schedule_jobs(
+        ctx=ctx,
+        aml_env=aml_env,
+        params=params,
+        extra_env=extra_env,
+        load_versions=load_versions,
+        job_names=list(job_names),
+        dry_run=dry_run,
+        workspace_override=workspace_name,
+    )
+
+    if is_ok:
+        click.echo(click.style("All schedules created successfully", fg="green"))
+        click_context.exit(0)
+    else:
+        click.echo(click.style("Some schedules failed", fg="red"))
         click_context.exit(1)
 
 

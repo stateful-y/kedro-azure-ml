@@ -11,9 +11,9 @@ Kedro plugin for running Kedro pipelines on Azure ML Pipelines.
 
     ---
 
-    Install Kedro Azure ML and submit your first pipeline to Azure ML
+    Install Kedro Azure ML and run your first pipeline on Azure ML
 
-    Install → Configure → Submit → Done
+    Install → Configure → Run → Done
 
     [Getting Started](pages/getting-started.md)
 
@@ -43,7 +43,7 @@ Step-by-step guide to installing and setting up Kedro Azure ML in your project.
 
 - [Installation](pages/getting-started.md#installation)
 - [Configuration](pages/getting-started.md#configuration-overview)
-- [Submit a pipeline](pages/getting-started.md#submit-to-azure-ml)
+- [Run a pipeline](pages/getting-started.md#run-on-azure-ml)
 
 ### [User guide](pages/user-guide.md)
 
