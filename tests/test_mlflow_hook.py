@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kedro_azure_ml.config import KedroAzureMLConfig
 from kedro_azure_ml.constants import (
     KEDRO_AZURE_ML_MLFLOW_ENABLED,
     KEDRO_AZURE_ML_MLFLOW_EXPERIMENT_NAME,
@@ -13,7 +12,6 @@ from kedro_azure_ml.constants import (
     KEDRO_AZURE_ML_MLFLOW_RUN_NAME,
 )
 from kedro_azure_ml.mlflow_hook import MlflowAzureMLHook
-
 
 MLFLOW_ENV_VARS = [
     KEDRO_AZURE_ML_MLFLOW_ENABLED,
@@ -89,7 +87,7 @@ class TestBeforePipelineRun:
 
     def test_starts_run_with_correct_experiment(self, hook):
         """When MLFLOW_RUN_ID is set by AzureML, the hook should start the
-        run under the job experiment — not whatever mlflow.yml says."""
+        run under the job experiment, not whatever mlflow.yml says."""
         os.environ[KEDRO_AZURE_ML_MLFLOW_ENABLED] = "1"
         os.environ[KEDRO_AZURE_ML_MLFLOW_EXPERIMENT_NAME] = "job-experiment"
         os.environ["MLFLOW_RUN_ID"] = "aml-run-123"
@@ -213,9 +211,7 @@ class TestBeforePipelineRun:
                 catalog=MagicMock(),
             )
 
-        mock_mlflow.MlflowClient().set_tag.assert_called_once_with(
-            "run-123", "mlflow.runName", "train_model"
-        )
+        mock_mlflow.MlflowClient().set_tag.assert_called_once_with("run-123", "mlflow.runName", "train_model")
 
     def test_graceful_when_mlflow_not_installed(self, hook):
         """Hook should not crash when mlflow is not importable."""
@@ -288,7 +284,5 @@ class TestOnPipelineError:
                 catalog=MagicMock(),
             )
 
-        error_tag_call = [
-            c for c in mock_mlflow.set_tag.call_args_list if c[0][0] == "kedro.error"
-        ][0]
+        error_tag_call = [c for c in mock_mlflow.set_tag.call_args_list if c[0][0] == "kedro.error"][0]
         assert len(error_tag_call[0][1]) == 250

@@ -14,54 +14,47 @@ from kedro_azure_ml.config import (
     KedroAzureMLConfig,
 )
 from kedro_azure_ml.datasets import AzureMLAssetDataset
-from kedro_azure_ml.runner import AzurePipelinesRunner
 from kedro_azure_ml.utils import CliContext
 from tests.utils import identity
 
 
 @pytest.fixture()
 def dummy_pipeline() -> Pipeline:
-    return pipeline(
-        [
-            node(identity, inputs="input_data", outputs="i2", name="node1"),
-            node(identity, inputs="i2", outputs="i3", name="node2"),
-            node(identity, inputs="i3", outputs="output_data", name="node3"),
-        ]
-    )
+    return pipeline([
+        node(identity, inputs="input_data", outputs="i2", name="node1"),
+        node(identity, inputs="i2", outputs="i3", name="node2"),
+        node(identity, inputs="i3", outputs="output_data", name="node3"),
+    ])
 
 
 @pytest.fixture()
 def dummy_pipeline_compute_tag() -> Pipeline:
-    return pipeline(
-        [
-            node(
-                identity,
-                inputs="input_data",
-                outputs="i2",
-                name="node1",
-                tags=["compute-2"],
-            ),
-            node(identity, inputs="i2", outputs="i3", name="node2"),
-            node(identity, inputs="i3", outputs="output_data", name="node3"),
-        ]
-    )
+    return pipeline([
+        node(
+            identity,
+            inputs="input_data",
+            outputs="i2",
+            name="node1",
+            tags=["compute-2"],
+        ),
+        node(identity, inputs="i2", outputs="i3", name="node2"),
+        node(identity, inputs="i3", outputs="output_data", name="node3"),
+    ])
 
 
 @pytest.fixture()
 def dummy_pipeline_deterministic_tag() -> Pipeline:
-    return pipeline(
-        [
-            node(
-                identity,
-                inputs="input_data",
-                outputs="i2",
-                name="node1",
-                tags=["deterministic"],
-            ),
-            node(identity, inputs="i2", outputs="i3", name="node2"),
-            node(identity, inputs="i3", outputs="output_data", name="node3"),
-        ]
-    )
+    return pipeline([
+        node(
+            identity,
+            inputs="input_data",
+            outputs="i2",
+            name="node1",
+            tags=["deterministic"],
+        ),
+        node(identity, inputs="i2", outputs="i3", name="node2"),
+        node(identity, inputs="i3", outputs="output_data", name="node3"),
+    ])
 
 
 @pytest.fixture()
@@ -80,7 +73,6 @@ def cli_context() -> CliContext:
     metadata = MagicMock()
     metadata.package_name = "tests"
     return CliContext("base", metadata)
-
 
 
 class ExtendedMagicMock(MagicMock):
@@ -114,9 +106,7 @@ def simulated_azureml_dataset(tmp_path):
 
     df.to_pickle(test_data_nested / "test.pickle")
 
-    test_data_folder_nested_file = (
-        tmp_path / "test_folder_nested_file" / "random" / "subfolder"
-    )
+    test_data_folder_nested_file = tmp_path / "test_folder_nested_file" / "random" / "subfolder"
     test_data_folder_nested_file.mkdir(parents=True)
     df.to_pickle(test_data_folder_nested_file / "test.pickle")
 
@@ -139,9 +129,7 @@ def simulated_azureml_dataset(tmp_path):
     return tmp_path
 
 
-def mock_download_artifact_from_aml_uri_with_dataset(
-    uri, destination, datastore_operation, simulated_dataset_path
-):
+def mock_download_artifact_from_aml_uri_with_dataset(uri, destination, datastore_operation, simulated_dataset_path):
     """Mock function to simulate downloading Azure ML artifacts locally"""
     import shutil
 
@@ -162,19 +150,14 @@ def mock_download_artifact_from_aml_uri_with_dataset(
     # Find the source directory based on URI
     source_folder = None
     for test_uri, folder_name in uri_to_source_map.items():
-        if (
-            test_uri in uri
-        ):  # Use 'in' instead of 'startswith' to handle both folder and file URIs
+        if test_uri in uri:  # Use 'in' instead of 'startswith' to handle both folder and file URIs
             source_folder = simulated_dataset_path / folder_name
             break
 
     # Copy all files from source folder to destination
     if source_folder and source_folder.exists():
         # Special handling for test_folder_nested_file - copy only from the nested subfolder
-        if (
-            "test_folder_nested_file" in str(source_folder)
-            and (source_folder / "random" / "subfolder").exists()
-        ):
+        if "test_folder_nested_file" in str(source_folder) and (source_folder / "random" / "subfolder").exists():
             nested_source = source_folder / "random" / "subfolder"
             for item in nested_source.rglob("*"):
                 if item.is_file():
@@ -212,9 +195,7 @@ def mock_azureml_client(request):
     mock_data_asset.path = request.param["path"]
     mock_data_asset.type = request.param["type"]
 
-    with patch(
-        "kedro_azure_ml.datasets.asset_dataset._get_azureml_client"
-    ) as mock_get_client:
+    with patch("kedro_azure_ml.datasets.asset_dataset._get_azureml_client") as mock_get_client:
         mock_client = MagicMock()
         mock_client.data.get.return_value = mock_data_asset
 
@@ -276,8 +257,6 @@ def factory_catalog():
         azureml_dataset="test_dataset_2",
         version=Version(None, None),
     )
-    resolver = CatalogConfigResolver(
-        config={"{name}": {"type": "kedro.io.MemoryDataset"}}
-    )
+    resolver = CatalogConfigResolver(config={"{name}": {"type": "kedro.io.MemoryDataset"}})
     catalog = DataCatalog(datasets={"i2": parq}, config_resolver=resolver)
     return catalog

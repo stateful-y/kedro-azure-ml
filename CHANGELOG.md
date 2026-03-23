@@ -14,9 +14,8 @@
 
 ### Refactoring
 
-- Config restructure: the `azure:` top-level key is replaced by three flat sections — `workspace`, `compute`, `execution`. `compute` and `workspace` are flat dicts keyed by name (with mandatory `__default__`). `experiment_name` moves into per-job config. The `temporary_storage` and `pipeline_data_passing` config sections are removed. by [@gtauzin](https://github.com/gtauzin)
+- Config restructure: the `azure:` top-level key is replaced by three flat sections -- `workspace`, `compute`, `execution`. `compute` and `workspace` are flat dicts keyed by name (with mandatory `__default__`). `experiment_name` moves into per-job config. The `temporary_storage` and `pipeline_data_passing` config sections are removed. by [@gtauzin](https://github.com/gtauzin)
 - CLI overhaul: `kedro azureml run` is removed. Use `kedro azureml submit -j <job> --once` for ad-hoc runs. `kedro azureml compile` now requires `-j <job>`. `--subscription-id` replaced by `--workspace`. by [@gtauzin](https://github.com/gtauzin)
-- Removed `MlflowIntegrationConfig` — MLflow is now auto-detected from the experiment name (mlflow.yml or per-job config) without a separate toggle. by [@gtauzin](https://github.com/gtauzin)
 - Blob storage removal: `KedroAzureRunnerDataset`, `KedroAzureRunnerDistributedDataset`, `BlobStorageDataPassing`, `KedroAzureRunnerConfig`, and `runner_dataset.py` module deleted. Pipeline data passing via `AzureMLPipelineDataset` is now the only mode. by [@gtauzin](https://github.com/gtauzin)
 - Removed `kedro azureml run` command and all its options (`--display-name`, `--compute-name`, `--experiment-name`, `-p`/`--pipeline`, `--wait-for-completion`, `--on-job-scheduled`). by [@gtauzin](https://github.com/gtauzin)
 - Removed `init` arguments: `-a`/`--storage-account-name`, `-c`/`--storage-container`, `--use-pipeline-data-passing`, and positional `experiment_name`. by [@gtauzin](https://github.com/gtauzin)
@@ -24,8 +23,11 @@
 - Removed constants: `KEDRO_AZURE_BLOB_TEMP_DIR_NAME`, `KEDRO_AZURE_RUNNER_CONFIG`, `KEDRO_AZURE_RUNNER_DATASET_TIMEOUT`. by [@gtauzin](https://github.com/gtauzin)
 - Removed dependencies: `adlfs` and `backoff`. by [@gtauzin](https://github.com/gtauzin)
 - Removed deprecated SDK v1 dataset stubs (`AzureMLPandasDataset`, `AzureMLFileDataset`) and `v1_datasets` module. by [@gtauzin](https://github.com/gtauzin)
+- Migrated project following the `stateful-y/python-package-copier` template. by [@gtauzin](https://github.com/gtauzin)
+- `kedro azureml init` no longer accepts positional arguments or `--aml-env`. It generates `conf/base/azureml.yml` with placeholder values to be filled in manually. by [@gtauzin](https://github.com/gtauzin)
 
 ### Documentation
 
-- Full Sphinx-style docstrings on all `cli_functions.py` helpers. by [@gtauzin](https://github.com/gtauzin)
-- Updated quickstart, scheduling, and data assets docs to reflect new config shape and CLI commands. by [@gtauzin](https://github.com/gtauzin)
+- Migrated documentation from Sphinx (RST) to MkDocs with Material theme. by [@gtauzin](https://github.com/gtauzin)
+- Rewrote all documentation pages: getting started, user guide, API reference, and contributing guide. by [@gtauzin](https://github.com/gtauzin)
+- Added NumPy-style docstrings to all public modules, classes, and functions (interrogate coverage at 100%). by [@gtauzin](https://github.com/gtauzin)

@@ -1,23 +1,23 @@
 """Tests for the schedule configuration models, pipeline filtering, scheduler module,
 and the ``kedro azureml submit`` CLI command."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 from azure.ai.ml.entities import CronTrigger, JobSchedule, RecurrenceTrigger
-
 from kedro.pipeline import Pipeline, node, pipeline
 
 from kedro_azure_ml.config import (
+    _CONFIG_TEMPLATE,
     CronScheduleConfig,
+    JobConfig,
     KedroAzureMLConfig,
     PipelineFilterOptions,
     RecurrencePatternConfig,
     RecurrenceScheduleConfig,
     ScheduleConfig,
-    JobConfig,
-    _CONFIG_TEMPLATE,
 )
 from kedro_azure_ml.generator import AzureMLPipelineGenerator
 from kedro_azure_ml.scheduler import (
@@ -25,10 +25,7 @@ from kedro_azure_ml.scheduler import (
     build_trigger,
     resolve_schedule,
 )
-from pathlib import Path
-
 from tests.utils import create_kedro_conf_dirs, identity
-
 
 FULL_CONFIG_YAML = """
 workspace:
@@ -91,13 +88,11 @@ def full_config() -> KedroAzureMLConfig:
 
 @pytest.fixture()
 def tagged_pipeline() -> Pipeline:
-    return pipeline(
-        [
-            node(identity, inputs="input_data", outputs="i2", name="node1", tags=["etl"]),
-            node(identity, inputs="i2", outputs="i3", name="node2", tags=["ml"]),
-            node(identity, inputs="i3", outputs="output_data", name="node3", tags=["etl"]),
-        ]
-    )
+    return pipeline([
+        node(identity, inputs="input_data", outputs="i2", name="node1", tags=["etl"]),
+        node(identity, inputs="i2", outputs="i3", name="node2", tags=["ml"]),
+        node(identity, inputs="i3", outputs="output_data", name="node3", tags=["etl"]),
+    ])
 
 
 class TestConfigModels:
@@ -167,9 +162,7 @@ class TestConfigModels:
 
 
 class TestPipelineFiltering:
-    def test_generator_with_tag_filter(
-        self, tagged_pipeline, dummy_plugin_config, multi_catalog
-    ):
+    def test_generator_with_tag_filter(self, tagged_pipeline, dummy_plugin_config, multi_catalog):
         filter_opts = PipelineFilterOptions(
             pipeline_name="test_pipe",
             tags=["etl"],
@@ -192,9 +185,7 @@ class TestPipelineFiltering:
             # Only node1 and node3 have the "etl" tag
             assert set(job.jobs.keys()) == {"node1", "node3"}
 
-    def test_generator_with_from_to_nodes_filter(
-        self, tagged_pipeline, dummy_plugin_config, multi_catalog
-    ):
+    def test_generator_with_from_to_nodes_filter(self, tagged_pipeline, dummy_plugin_config, multi_catalog):
         filter_opts = PipelineFilterOptions(
             pipeline_name="test_pipe",
             from_nodes=["node2"],
@@ -217,9 +208,7 @@ class TestPipelineFiltering:
             job = generator.generate()
             assert set(job.jobs.keys()) == {"node2", "node3"}
 
-    def test_generator_without_filter_keeps_all_nodes(
-        self, tagged_pipeline, dummy_plugin_config, multi_catalog
-    ):
+    def test_generator_without_filter_keeps_all_nodes(self, tagged_pipeline, dummy_plugin_config, multi_catalog):
         with patch.object(
             AzureMLPipelineGenerator,
             "get_kedro_pipeline",
@@ -244,9 +233,7 @@ class TestScheduler:
         assert result.cron.expression == "0 6 * * *"
 
     def test_resolve_schedule_inline(self):
-        inline = ScheduleConfig(
-            cron=CronScheduleConfig(expression="15 10 * * *")
-        )
+        inline = ScheduleConfig(cron=CronScheduleConfig(expression="15 10 * * *"))
         result = resolve_schedule(inline, None)
         assert result is inline
 
@@ -272,9 +259,7 @@ class TestScheduler:
             recurrence=RecurrenceScheduleConfig(
                 frequency="week",
                 interval=2,
-                schedule=RecurrencePatternConfig(
-                    hours=[10], minutes=[30], week_days=["Monday", "Friday"]
-                ),
+                schedule=RecurrencePatternConfig(hours=[10], minutes=[30], week_days=["Monday", "Friday"]),
                 time_zone="UTC",
             )
         )
@@ -309,6 +294,7 @@ class TestSubmitCLI:
     ):
         """--dry-run should report what would be created without calling Azure."""
         from click.testing import CliRunner
+
         from kedro_azure_ml import cli
         from kedro_azure_ml.manager import KedroContextManager
 
@@ -316,9 +302,7 @@ class TestSubmitCLI:
 
         # Extend plugin config with schedules + jobs
         dummy_plugin_config.schedules = {
-            "daily": ScheduleConfig(
-                cron=CronScheduleConfig(expression="0 6 * * *")
-            ),
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
         }
         dummy_plugin_config.jobs = {
             "test_job": JobConfig(
@@ -333,15 +317,16 @@ class TestSubmitCLI:
         mock_mgr.context.catalog = multi_catalog
         mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
 
-        with patch.object(
-            KedroContextManager, "__enter__", return_value=mock_mgr
-        ), patch.object(
-            KedroContextManager, "__exit__", return_value=False
-        ), patch.object(
-            AzureMLPipelineGenerator,
-            "get_kedro_pipeline",
-            return_value=tagged_pipeline,
-        ), patch.object(Path, "cwd", return_value=tmp_path):
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 cli.submit,
@@ -363,15 +348,14 @@ class TestSubmitCLI:
     ):
         """--job flag should filter to only the named job."""
         from click.testing import CliRunner
+
         from kedro_azure_ml import cli
         from kedro_azure_ml.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
 
         dummy_plugin_config.schedules = {
-            "daily": ScheduleConfig(
-                cron=CronScheduleConfig(expression="0 6 * * *")
-            ),
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
         }
         dummy_plugin_config.jobs = {
             "job_a": JobConfig(
@@ -390,15 +374,16 @@ class TestSubmitCLI:
         mock_mgr.context.catalog = multi_catalog
         mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
 
-        with patch.object(
-            KedroContextManager, "__enter__", return_value=mock_mgr
-        ), patch.object(
-            KedroContextManager, "__exit__", return_value=False
-        ), patch.object(
-            AzureMLPipelineGenerator,
-            "get_kedro_pipeline",
-            return_value=tagged_pipeline,
-        ), patch.object(Path, "cwd", return_value=tmp_path):
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 cli.submit,
@@ -419,15 +404,14 @@ class TestSubmitCLI:
     ):
         """Requesting a non-existent job name should error."""
         from click.testing import CliRunner
+
         from kedro_azure_ml import cli
         from kedro_azure_ml.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
 
         dummy_plugin_config.schedules = {
-            "daily": ScheduleConfig(
-                cron=CronScheduleConfig(expression="0 6 * * *")
-            ),
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
         }
         dummy_plugin_config.jobs = {
             "real_job": JobConfig(
@@ -440,11 +424,11 @@ class TestSubmitCLI:
         mock_mgr.plugin_config = dummy_plugin_config
         mock_mgr.context.params = {}
 
-        with patch.object(
-            KedroContextManager, "__enter__", return_value=mock_mgr
-        ), patch.object(
-            KedroContextManager, "__exit__", return_value=False
-        ), patch.object(Path, "cwd", return_value=tmp_path):
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 cli.submit,
@@ -463,6 +447,7 @@ class TestSubmitCLI:
     ):
         """Submit should error when no jobs section exists in config."""
         from click.testing import CliRunner
+
         from kedro_azure_ml import cli
         from kedro_azure_ml.manager import KedroContextManager
 
@@ -475,11 +460,11 @@ class TestSubmitCLI:
         mock_mgr.plugin_config = dummy_plugin_config
         mock_mgr.context.params = {}
 
-        with patch.object(
-            KedroContextManager, "__enter__", return_value=mock_mgr
-        ), patch.object(
-            KedroContextManager, "__exit__", return_value=False
-        ), patch.object(Path, "cwd", return_value=tmp_path):
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 cli.submit,

@@ -1,0 +1,166 @@
+/* Kedro Azure ML — Material Design color token overrides.
+ *
+ * Shared color palette for all stateful-y packages.
+ */
+
+/* Light theme */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #8b5cf6;
+  --md-primary-fg-color--light: #a78bfa;
+  --md-primary-fg-color--dark: #7c3aed;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffffb3;
+  --md-accent-fg-color: #136f63;
+  --md-accent-fg-color--transparent: #136f631a;
+  --md-typeset-a-color: #8b5cf6;
+  --md-default-fg-color: #1f2937;
+  --md-default-fg-color--light: #374151;
+  --md-default-fg-color--lighter: #6b7280;
+  --md-default-fg-color--lightest: #9ca3af;
+  --md-default-bg-color: #ffffff;
+  --md-default-bg-color--light: #f9fafb;
+  --md-default-bg-color--lighter: #f3f4f6;
+  --md-default-bg-color--lightest: #e5e7eb;
+}
+
+/* Dark theme */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #136f63;
+  --md-primary-fg-color--light: #1a8f80;
+  --md-primary-fg-color--dark: #0e5a50;
+  --md-primary-bg-color: #050505;
+  --md-primary-bg-color--light: #050505b3;
+  --md-accent-fg-color: #a78bfa;
+  --md-accent-fg-color--transparent: #a78bfa1a;
+  --md-typeset-a-color: #a78bfa;
+  --md-default-fg-color: #ffffff;
+  --md-default-fg-color--light: #e5e7eb;
+  --md-default-fg-color--lighter: #9ca3af;
+  --md-default-fg-color--lightest: #6b7280;
+  --md-default-bg-color: #050505;
+  --md-default-bg-color--light: #0a0a0a;
+  --md-default-bg-color--lighter: #111111;
+  --md-default-bg-color--lightest: #1a1a1a;
+}
+
+/* === API Reference: DataTables integration === */
+
+/* DataTables Material styling */
+.api-table-wrapper {
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+#api-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#api-table thead th {
+  background: var(--md-default-bg-color--lighter);
+  font-weight: 600;
+  padding: 0.75em 1em;
+  text-align: left;
+  border-bottom: 2px solid var(--md-default-bg-color--lightest);
+}
+
+#api-table tbody td {
+  padding: 0.5em 1em;
+  border-bottom: 1px solid var(--md-default-bg-color--lightest);
+}
+
+#api-table tbody tr:hover {
+  background: var(--md-default-bg-color--light);
+}
+
+/* API type badges */
+.api-badge {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border-radius: 0.25em;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.api-badge--class {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.api-badge--function {
+  background: #dcfce7;
+  color: #166534;
+}
+
+[data-md-color-scheme="slate"] .api-badge--class {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+[data-md-color-scheme="slate"] .api-badge--function {
+  background: #14532d;
+  color: #86efac;
+}
+
+/* DataTables controls */
+.api-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.api-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1em;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+/* DataTables search input */
+.dataTables_filter input {
+  padding: 0.4em 0.8em;
+  border: 1px solid var(--md-default-bg-color--lightest);
+  border-radius: 0.25em;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  font-size: 0.9em;
+}
+
+/* GitHub source link */
+.github-source-link {
+  margin: 0.5em 0;
+}
+
+.github-source-link a {
+  color: var(--md-typeset-a-color);
+  text-decoration: none;
+  font-size: 0.9em;
+}
+
+.github-source-link a:hover {
+  text-decoration: underline;
+}
+
+/* Collapsible source code */
+.source-code-details {
+  margin: 0.5em 0;
+  border: 1px solid var(--md-default-bg-color--lightest);
+  border-radius: 0.25em;
+}
+
+.source-code-details summary {
+  padding: 0.5em 1em;
+  cursor: pointer;
+  background: var(--md-default-bg-color--lighter);
+  font-size: 0.9em;
+}
+
+/* Doc section headings */
+.doc-section-heading {
+  margin-top: 1.5em;
+}
