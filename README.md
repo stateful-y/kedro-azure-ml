@@ -11,6 +11,9 @@
 [![PyPI Version](https://img.shields.io/pypi/v/kedro-azureml-pipeline)](https://pypi.org/project/kedro-azureml-pipeline/)
 [![codecov](https://codecov.io/gh/stateful-y/kedro-azureml-pipeline/branch/main/graph/badge.svg)](https://codecov.io/gh/stateful-y/kedro-azureml-pipeline)
 
+> [!NOTE]
+> This project is a fork of [kedro-azureml](https://github.com/getindata/kedro-azureml) originally created by [Marcin Zablocki](https://github.com/marrrcin) at [GetInData](https://github.com/getindata). It has been forked to continue active development and add new features.
+
 ## What is Kedro AzureML Pipeline?
 
 Kedro AzureML Pipeline is a plugin that enables running [Kedro](https://kedro.org/) pipelines on [Azure ML Pipelines](https://learn.microsoft.com/en-us/azure/machine-learning/concept-ml-pipelines). It translates your Kedro pipeline into an Azure ML pipeline job where each Kedro node becomes a separate step.
@@ -117,3 +120,23 @@ We welcome contributions, feedback, and questions:
 ## License
 
 This project is licensed under the terms of the [Apache-2.0 License](https://github.com/stateful-y/kedro-azureml-pipeline/blob/main/LICENSE).
+
+## Acknowledgements
+
+This project is a fork of [kedro-azureml](https://github.com/getindata/kedro-azureml), originally developed by [GetInData](https://github.com/getindata). We are grateful for their work in creating the initial plugin that bridges Kedro and Azure ML Pipelines. We have continued development to add new features, improve documentation, and maintain the project under the `kedro-azureml-pipeline` package name.
+
+We would also like to thank [Evolta Technologies](https://www.evolta-technologies.com/) for their support to the project.
+
+<p align="center">
+  <a href="https://www.evolta-technologies.com/">
+    <img src="docs/assets/evolta_logo.png" alt="Evolta Technologies" width="600">
+  </a>
+</p>
+
+This project is maintained by [stateful-y](https://stateful-y.io), an ML consultancy specializing in MLOps and data science & engineering. If you're interested in collaborating or learning more about our services, please visit our website.
+
+<p align="center">
+  <a href="https://stateful-y.io">
+    <img src="docs/assets/made_by_stateful-y.png" alt="Made by stateful-y" width="200">
+  </a>
+</p>
