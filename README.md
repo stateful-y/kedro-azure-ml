@@ -129,7 +129,7 @@ We would also like to thank [Evolta Technologies](https://www.evolta-technologie
 
 <p align="center">
   <a href="https://www.evolta-technologies.com/">
-    <img src="docs/assets/evolta_logo.png" alt="Evolta Technologies" width="600">
+    <img src="docs/assets/evolta_logo.png" alt="Evolta Technologies" width="400">
   </a>
 </p>
 
