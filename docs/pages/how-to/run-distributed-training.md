@@ -70,11 +70,9 @@ Then set the value in `conf/base/parameters.yml`:
 num_training_nodes: 4
 ```
 
-## How it works during remote execution
+## How it works
 
-When the pipeline generator encounters a node decorated with `@distributed_job`, it wraps that pipeline step in an Azure ML distributed job configuration. The step runs on `num_nodes` compute nodes simultaneously. Each node receives the same inputs and is expected to coordinate via the framework's native communication primitives (e.g. NCCL for PyTorch).
-
-During local runs, `@distributed_job` has no effect - the function runs normally as a single-process Kedro node.
+During local runs, `@distributed_job` has no effect - the function runs normally. During Azure ML runs, the pipeline generator wraps the step in a distributed job configuration. See the [architecture overview](../explanation/architecture.md) for details on pipeline compilation.
 
 ## See also
 

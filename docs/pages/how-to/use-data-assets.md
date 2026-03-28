@@ -89,11 +89,9 @@ The `root_dir` and `filepath_arg` parameters work the same as in `AzureMLAssetDa
 | Input/output data registered as a versioned asset in Azure ML | `AzureMLAssetDataset` |
 | Intermediate data passing between pipeline steps | `AzureMLPipelineDataset` |
 
-## How local runs work
+## Local runs
 
-When running `kedro run` locally, `AzureMLAssetDataset` downloads the asset to the local `root_dir` on first access. The `azureml_local_run_hook` registered in `settings.py` injects the Azure ML workspace configuration into each dataset before the run starts.
-
-`AzureMLPipelineDataset` behaves like a normal file-backed dataset during local runs - no Azure ML calls are made.
+During local runs, `AzureMLAssetDataset` downloads the asset to `root_dir` on first access. `AzureMLPipelineDataset` behaves like a normal file-backed dataset with no Azure ML calls. See the [architecture overview](../explanation/architecture.md) for details on how the plugin handles both local and remote execution.
 
 ## See also
 

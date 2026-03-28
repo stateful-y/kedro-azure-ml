@@ -307,6 +307,11 @@ def _build_api_table_html(project_root):
     )
 
 
+# ---------------------------------------------------------------------------
+# API sidebar module TOC
+# ---------------------------------------------------------------------------
+
+
 def _build_module_toc(config, current_src_path=None):
     """Build the module TOC list used by the api-submodule sidebar template.
 
@@ -367,6 +372,10 @@ def _build_module_toc(config, current_src_path=None):
 
     return module_toc
 
+
+# ---------------------------------------------------------------------------
+# API page content post-processing
+# ---------------------------------------------------------------------------
 
 _GIT_REF_CACHE = None
 
@@ -725,13 +734,17 @@ def on_page_markdown(markdown, page, config, files):
     if "<!-- API_TABLE -->" in markdown:
         table = _build_api_table_html(project_root)
         markdown = markdown.replace("<!-- API_TABLE -->", table)
+
     # Strip EXAMPLES_FOR placeholders when examples are disabled
     markdown = re.sub(r"<!-- EXAMPLES_FOR:[\w.]+ -->\n?", "", markdown)
+
     return markdown
 
 
 def on_pre_build(config):
+    """Generate API submodule pages."""
     project_root = Path(__file__).parent.parent
+
     # Generate per-submodule API reference pages
     _generate_api_pages(project_root)
 

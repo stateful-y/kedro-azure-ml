@@ -1,5 +1,5 @@
 site_name: Kedro AzureML Pipeline
-site_description: Kedro plugin to support running pipelines on Microsoft Azure ML Pipeline
+site_description: Kedro plugin with Azure ML Pipelines support
 site_url: https://kedro-azureml-pipeline.readthedocs.io/
 repo_url: https://github.com/stateful-y/kedro-azureml-pipeline
 repo_name: stateful-y/kedro-azureml-pipeline
@@ -31,7 +31,6 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-
   features:
     - content.code.copy
     - content.code.annotate

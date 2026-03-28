@@ -1,12 +1,6 @@
-# Getting Started with Kedro AzureML Pipeline
+# Getting Started
 
-In this tutorial you will deploy a Kedro project to Azure ML Pipelines from scratch. You will create a Kedro project from a starter template, install and configure the plugin, and submit your first pipeline run to Azure ML managed compute.
-
-By the end you will have:
-
-- A working Kedro project connected to an Azure ML workspace
-- Your pipeline executing on cloud compute
-- An understanding of how the plugin bridges Kedro and Azure ML
+In this tutorial we will take a Kedro project, connect it to Azure ML, and submit a pipeline run to cloud compute. Along the way we will install the plugin, configure a workspace, define a job, and see it running in Azure ML Studio.
 
 ## Prerequisites
 
@@ -14,18 +8,18 @@ Before you begin, make sure you have:
 
 - Python 3.11+
 - An [Azure ML workspace](https://learn.microsoft.com/en-us/azure/machine-learning/concept-workspace) with at least one compute cluster
-- Azure credentials configured - run `az login` or configure a service principal
+- Azure credentials configured (`az login`)
 - An Azure ML environment created in your workspace (e.g. `my-env@latest`)
 
 ## Step 1 - Create a Kedro project
 
-Start with the `spaceflights-pandas` starter. If you already have a Kedro project, skip this step.
+We will use the `spaceflights-pandas` starter:
 
 ```bash
 kedro new --starter=spaceflights-pandas
 ```
 
-Follow the prompts. Once done, install the project dependencies:
+Follow the prompts, then install the project dependencies:
 
 === "pip"
     ```bash
@@ -49,15 +43,21 @@ Follow the prompts. Once done, install the project dependencies:
     uv add kedro-azureml-pipeline
     ```
 
-Verify the installation:
+Let's verify the installation:
 
 ```bash
 kedro azureml --help
 ```
 
+You should see output starting with:
+
+```text
+Usage: kedro azureml [OPTIONS] COMMAND [ARGS]...
+```
+
 ## Step 3 - Register the hooks
 
-The plugin provides `azureml_local_run_hook`, which ensures that data assets are resolved correctly during local runs. Register it in `src/<package_name>/settings.py`:
+Open `src/<package_name>/settings.py` and add:
 
 ```python
 from kedro_azureml_pipeline.hooks import azureml_local_run_hook
@@ -65,24 +65,26 @@ from kedro_azureml_pipeline.hooks import azureml_local_run_hook
 HOOKS = (azureml_local_run_hook,)
 ```
 
-This is the only code change required in your Kedro project. All other existing hooks, catalog entries, and pipeline definitions remain exactly as-is.
-
 ## Step 4 - Initialize the configuration
 
-From your Kedro project root:
+From the project root, run:
 
 ```bash
 kedro azureml init
 ```
 
-This creates two files:
+You should see:
 
-- `conf/base/azureml.yml` - workspace, compute, and execution settings (pre-filled with placeholders)
-- `.amlignore` - controls which local files are excluded from the code upload to Azure ML
+```text
+Creating conf/base/azureml.yml...
+Creating .amlignore...
+```
+
+Notice that two new files appeared: `conf/base/azureml.yml` for plugin settings and `.amlignore` for controlling which files are uploaded to Azure ML.
 
 ## Step 5 - Configure your workspace
 
-Open `conf/base/azureml.yml` and replace the placeholders with your Azure details:
+Open `conf/base/azureml.yml` and replace the placeholders:
 
 ```yaml
 workspace:
@@ -100,13 +102,9 @@ execution:
   code_directory: "."
 ```
 
-The `workspace.__default__` and `compute.__default__` entries are required. The `execution.environment` must reference an existing Azure ML environment in your workspace.
-
-Setting `code_directory: "."` tells the plugin to upload your project code as a snapshot before each run. Set it to `null` if your environment already bundles all necessary code.
-
 ## Step 6 - Define a job
 
-Add a `jobs` section to `azureml.yml`:
+Add a `jobs` section to the same `azureml.yml` file:
 
 ```yaml
 jobs:
@@ -117,29 +115,37 @@ jobs:
     display_name: "Training pipeline"
 ```
 
-Each job maps a named Kedro pipeline to an Azure ML pipeline submission. The `pipeline_name: "__default__"` value runs the default Kedro pipeline.
-
 ## Step 7 - Run on Azure ML
 
-Submit the job:
+Now let's submit the job:
 
 ```bash
 kedro azureml run -j training
 ```
 
-This compiles your Kedro pipeline into an Azure ML pipeline definition, uploads your code snapshot, and submits the job. You will see the run URL printed to the terminal. Open Azure ML Studio to monitor progress.
+After a moment, you should see a run URL printed to the terminal. Open it in your browser to see the pipeline running in Azure ML Studio:
 
-To block your terminal until the run completes:
+```text
+https://ml.azure.com/runs/<run-id>?wsid=...
+```
+
+To block your terminal until the run completes, add `--wait-for-completion`:
 
 ```bash
 kedro azureml run -j training --wait-for-completion
 ```
 
-Congratulations - your Kedro pipeline is now running on Azure ML managed compute.
+## What we built
 
-## What's next
+You have submitted a Kedro pipeline to Azure ML managed compute. Along the way, you:
 
-- [Configuration reference](../reference/configuration.md) - all `azureml.yml` fields for workspaces, compute, jobs, and environments
+- Installed `kedro-azureml-pipeline` and registered its hook
+- Configured a workspace, compute target, and environment in `azureml.yml`
+- Defined a job that maps a Kedro pipeline to an Azure ML pipeline submission
+- Submitted the job and saw it running in Azure ML Studio
+
+## Next steps
+
 - [How to schedule pipelines](../how-to/schedule-pipelines.md) - set up recurring cron and recurrence schedules
-- [CLI reference](../reference/cli.md) - all flags for `run`, `compile`, `schedule`, and other commands
-- [Architecture overview](../explanation/architecture.md) - understand how Kedro and Azure ML fit together
+- [Configuration reference](../reference/configuration.md) - all `azureml.yml` fields
+- [Architecture overview](../explanation/architecture.md) - how the plugin translates Kedro to Azure ML
