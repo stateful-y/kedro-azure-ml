@@ -94,8 +94,10 @@ extra_css:
   - stylesheets/theme.css
   - https://cdn.datatables.net/2.2.2/css/dataTables.dataTables.min.css
 
+
 exclude_docs: |
   api-submodule.html
+
 
 not_in_nav: |
   assets/README.md
