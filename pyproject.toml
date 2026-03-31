@@ -23,6 +23,7 @@ dependencies = [
     "kedro>=1.0.0",
     "kedro-datasets>=1.0.0",
     "pydantic>=2.6.4",
+    "cachetools>=5.0.0",
     "cloudpickle>=3.0.0",
     "azure-ai-ml>=1.2.0",
     "pyarrow>=18.0.0",
