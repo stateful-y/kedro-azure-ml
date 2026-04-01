@@ -1,69 +1,8 @@
-##########################
-# KEDRO PROJECT
-
-# ignore all local configuration
-conf/local/**
-!conf/local/.gitkeep
-.telemetry
-
-# ignore potentially sensitive credentials files
-conf/base/credentials.yml
-
-# ignore everything in the following folders
-data/**
-logs/**
-
-# except their sub-folders
-!data/**/
-!logs/**/
-
-# also keep all .gitkeep files
-!.gitkeep
-
-# also keep the test dataset and dataset schema
-!data/test/bq_ga4_test_data.csv
-!data/schema/dataset_schema.proto
-
-
-##########################
-# Common files
-
-# IntelliJ
-.idea/
-*.iml
-out/
-.idea_modules/
-
-### macOS
-*.DS_Store
-.AppleDouble
-.LSOverride
-.Trashes
-
-# Vim
-*~
-.*.swo
-.*.swp
-
-# emacs
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-
-# JIRA plugin
-atlassian-ide-plugin.xml
-
-# C extensions
-*.so
-
-### Python template
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Distribution / packaging
+*.so
 .Python
 build/
 develop-eggs/
@@ -77,101 +16,122 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
+# Testing
+.pytest_cache/
 .coverage
 .coverage.*
-.cache
-nosetests.xml
-coverage.xml
+htmlcov/
+.tox/
+.nox/
 *.cover
-.hypothesis/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
 *.log
-.static_storage/
-.media/
-local_settings.py
+.hypothesis/
+junit.*.xml
+coverage.*.xml
+coverage.xml
 
-# Flask stuff:
-instance/
-.webassets-cache
+# Type checking
+.ty_cache/
+.pytype/
+.pyre/
 
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
+# Documentation
 docs/_build/
+site/
+.mkdocs_cache/
 
-# PyBuilder
-target/
+# Distribution
+*.whl
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
-# IPython
-.ipython/profile_default/history.sqlite
-.ipython/profile_default/startup/README
+# Marimo
+examples/__marimo__/
 
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Environment
 .env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+.env.local
 
-# mkdocs documentation
-/site
+# Ruff
+.ruff_cache/
 
-# mypy
-.mypy_cache/
+# build
+uv.lock
+src/kedro_azureml_pipeline/_version.py
 
-credentials.json
+# Auto-generated API submodule pages (created by docs/hooks.py)
+docs/pages/api/
 
-/mlruns/
-/ga4/
+# Worktrees
+.worktrees/
 
-# terraform
-terraform/terraform.tfstate.backup
-terraform/.terraform.lock.hcl
-terraform/.terraform/providers/registry.terraform.io/hashicorp/google-beta/4.21.0/darwin_amd64/terraform-provider-google-beta_v4.21.0_x5
-terraform/.terraform/providers/registry.terraform.io/hashicorp/google/4.21.0/darwin_amd64/terraform-provider-google_v4.21.0_x5
-terraform/terraform.tfstate
+# AI Assistant Instructions
+CLAUDE.md
+CLAUDE_INSTRUCTIONS.md
+.claude.md
+claude-instructions.md
+claude-config.md
+claude-prompt.md
 
-.idea
-conf/azure/credentials.yml
+# GitHub Copilot
+COPILOT.md
+COPILOT_INSTRUCTIONS.md
+.copilot.md
+copilot-instructions.md
+copilot-config.md
+copilot-prompt.md
 
-spaceflights
-/dev-utils/local.env
+# ChatGPT / OpenAI
+CHATGPT.md
+GPT.md
+OPENAI.md
+chatgpt-instructions.md
+gpt-instructions.md
+openai-instructions.md
+
+# Generic AI/LLM instructions
+AI.md
+AI_INSTRUCTIONS.md
+LLM.md
+LLM_INSTRUCTIONS.md
+.ai-instructions.md
+.llm-instructions.md
+ai-prompt.md
+llm-prompt.md
+assistant-instructions.md
+
+# Custom instructions directories
+.ai/
+.llm/
+.copilot/
+.claude/
+ai-instructions/
+llm-instructions/
+
+# Project-specific AI context (that you want to keep private)
+.cursorrules
+.cursor/
+.aider*
+.continue/

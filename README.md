@@ -1,50 +1,146 @@
-# Kedro Azure ML Pipelines plugin
-
-[![Python Version](https://img.shields.io/pypi/pyversions/kedro-azureml)](https://github.com/getindata/kedro-azureml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![SemVer](https://img.shields.io/badge/semver-2.0.0-green)](https://semver.org/)
-[![PyPI version](https://badge.fury.io/py/kedro-azureml.svg)](https://pypi.org/project/kedro-azureml/)
-[![Downloads](https://pepy.tech/badge/kedro-azureml)](https://pepy.tech/project/kedro-azureml)
-
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=getindata_kedro-azureml&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=getindata_kedro-azureml)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=getindata_kedro-azureml&metric=coverage)](https://sonarcloud.io/summary/new_code?id=getindata_kedro-azureml)
-[![Documentation Status](https://readthedocs.org/projects/kedro-vertexai/badge/?version=latest)](https://kedro-azureml.readthedocs.io/en/latest/?badge=latest)
-
 <p align="center">
-  <a href="https://getindata.com/solutions/ml-platform-machine-learning-reliable-explainable-feature-engineering"><img height="150" src="https://getindata.com/img/logo.svg"></a>
-  <h3 align="center">We help companies turn their data into assets</h3>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/stateful-y/kedro-azureml-pipeline/main/docs/assets/logo_light.png">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/stateful-y/kedro-azureml-pipeline/main/docs/assets/logo_dark.png">
+    <img src="https://raw.githubusercontent.com/stateful-y/kedro-azureml-pipeline/main/docs/assets/logo_light.png" alt="Kedro AzureML Pipeline">
+  </picture>
 </p>
 
-## About
-Following plugin enables running Kedro pipelines on Azure ML Pipelines service.
+[![Python Version](https://img.shields.io/pypi/pyversions/kedro-azureml-pipeline)](https://pypi.org/project/kedro-azureml-pipeline/)
+[![License](https://img.shields.io/github/license/stateful-y/kedro-azureml-pipeline)](https://github.com/stateful-y/kedro-azureml-pipeline/blob/main/LICENSE)
+[![PyPI Version](https://img.shields.io/pypi/v/kedro-azureml-pipeline)](https://pypi.org/project/kedro-azureml-pipeline/)
+[![codecov](https://codecov.io/gh/stateful-y/kedro-azureml-pipeline/branch/main/graph/badge.svg)](https://codecov.io/gh/stateful-y/kedro-azureml-pipeline)
 
-We support 2 native Azure Machine Learning types of workflows:
-* For Data Scientists: fast, iterative development with code upload 
-* For MLOps: stable, repeatable workflows with Docker 
+> [!NOTE]
+> This project is a fork of [kedro-azureml](https://github.com/getindata/kedro-azureml) originally created by [Marcin Zablocki](https://github.com/marrrcin) at [GetInData](https://github.com/getindata). It has been forked to continue active development and add new features.
 
-## Documentation 
+## What is Kedro AzureML Pipeline?
 
-For detailed documentation refer to https://kedro-azureml.readthedocs.io/
+Kedro AzureML Pipeline is a plugin that enables running [Kedro](https://kedro.org/) pipelines on [Azure ML Pipelines](https://learn.microsoft.com/en-us/azure/machine-learning/concept-ml-pipelines). It translates your Kedro pipeline into an Azure ML pipeline job where each Kedro node becomes a separate step.
 
-## Usage guide
+Two deployment workflows are supported, both backed by Azure ML Environments:
 
+- **Code upload**: only dependencies live in the Docker image; source code is uploaded at runtime (fast iteration for data scientists)
+- **Docker image**: code is baked into the image (stable, repeatable workflows for MLOps)
+
+### Key features
+
+| Feature | Description |
+|---|---|
+| **Pipeline translation** | Automatic Kedro node → Azure ML step mapping via the `compile`, `run`, and `schedule` CLI commands |
+| **Named jobs** | Define multiple jobs in `azureml.yml`, each targeting a different pipeline, compute, or workspace |
+| **Scheduling** | Attach cron or recurrence schedules to jobs for recurring Azure ML pipeline runs |
+| **Data assets** | `AzureMLAssetDataset` for reading/writing Azure ML `uri_file` and `uri_folder` data assets |
+| **Distributed training** | `@distributed_job` decorator with PyTorch, TensorFlow, and MPI backends |
+| **MLflow integration** | Optional hook that wires Kedro-MLFlow to log under the correct Azure ML experiment |
+| **Multiple workspaces** | Named workspace definitions with a `__default__` fallback |
+
+## Installation
+
+```bash
+pip install kedro-azureml-pipeline
 ```
-Usage: kedro azureml [OPTIONS] COMMAND [ARGS]...
 
-Options:
-  -e, --env TEXT  Environment to use.
-  -h, --help      Show this message and exit.
+or with [uv](https://docs.astral.sh/uv/):
 
-Commands:
-  compile  Compiles the pipeline into YAML format
-  init     Creates basic configuration for Kedro AzureML plugin
-  run      Runs the specified pipeline in Azure ML Pipelines
+```bash
+uv add kedro-azureml-pipeline
 ```
 
-## Quickstart
-Follow **quickstart** section on [kedro-azureml.readthedocs.io](https://kedro-azureml.readthedocs.io/) to get up to speed with plugin usage or watch the video below
+## Quick start
 
-<a href="https://bit.ly/kedroazureml">
-    <img src="./docs/images/tutorial-video-yt.jpg" alt="Kedro Azure ML video tutorial" title="Kedro Azure ML video tutorial" />
-</a>
+### 1. Initialize configuration
 
+```bash
+kedro azureml init
+```
+
+This creates `conf/base/azureml.yml` with placeholder values and an `.amlignore` file.
+
+### 2. Review the generated configuration
+
+Open `conf/base/azureml.yml` and fill in your Azure details:
+
+```yaml
+workspace:
+  __default__:
+    subscription_id: "<subscription_id>"
+    resource_group: "<resource_group>"
+    name: "<workspace_name>"
+
+compute:
+  __default__:
+    cluster_name: "<cluster_name>"
+
+execution:
+  environment: "<environment>"
+  code_directory: "."
+```
+
+### 3. Define a job and submit
+
+Add a job to `azureml.yml`:
+
+```yaml
+jobs:
+  training:
+    pipeline:
+      pipeline_name: "__default__"
+    experiment_name: "my-experiment"
+```
+
+Then submit it:
+
+```bash
+kedro azureml submit -j training
+```
+
+Use `--dry-run` to preview without submitting, or `--wait-for-completion` to block until the run finishes.
+
+### 4. Compile to YAML (optional)
+
+Export the Azure ML pipeline definition for inspection or CI:
+
+```bash
+kedro azureml compile -j training -o pipeline.yaml
+```
+
+## Documentation
+
+Full documentation is available at [https://kedro-azureml-pipeline.readthedocs.io/](https://kedro-azureml-pipeline.readthedocs.io/).
+
+## Contributing
+
+We welcome contributions, feedback, and questions:
+
+- **Report issues or request features**: [GitHub Issues](https://github.com/stateful-y/kedro-azureml-pipeline/issues)
+- **Contributing guide**: [CONTRIBUTING.md](https://github.com/stateful-y/kedro-azureml-pipeline/blob/main/CONTRIBUTING.md)
+- **Discussions**: [GitHub Discussions](https://github.com/stateful-y/kedro-azureml-pipeline/discussions)
+
+## License
+
+This project is licensed under the terms of the [Apache-2.0 License](https://github.com/stateful-y/kedro-azureml-pipeline/blob/main/LICENSE).
+
+## Acknowledgements
+
+This project is a fork of [kedro-azureml](https://github.com/getindata/kedro-azureml), originally developed by [GetInData](https://github.com/getindata). We are grateful for their work in creating the initial plugin that bridges Kedro and Azure ML Pipelines. We have continued development to add new features, improve documentation, and maintain the project under the `kedro-azureml-pipeline` package name.
+
+We would also like to thank [Evolta Technologies](https://www.evolta-technologies.com/) for their support to the project.
+
+<br>
+
+<p align="center">
+  <a href="https://www.evolta-technologies.com/">
+    <img src="docs/assets/evolta_logo.png" alt="Evolta Technologies" width="400">
+  </a>
+</p>
+
+<br>
+
+This project is maintained by [stateful-y](https://stateful-y.io), an ML consultancy specializing in MLOps and data science & engineering. If you're interested in collaborating or learning more about our services, please visit our website.
+
+<p align="center">
+  <a href="https://stateful-y.io">
+    <img src="docs/assets/made_by_stateful-y.png" alt="Made by stateful-y" width="200">
+  </a>
+</p>

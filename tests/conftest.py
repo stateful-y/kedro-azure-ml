@@ -1,128 +1,167 @@
+import importlib.metadata as _ilmd
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
+import kedro.framework.session.session as _kedro_session_mod
 import pandas as pd
 import pytest
+from kedro.framework import project as _kedro_project
 from kedro.io import DataCatalog
 from kedro.io.core import Version
 from kedro.pipeline import Pipeline, node, pipeline
 from kedro_datasets.pandas import CSVDataset, ParquetDataset
 
-from kedro_azureml.config import (
+from kedro_azureml_pipeline.config import (
     _CONFIG_TEMPLATE,
-    AzureTempStorageConfig,
     KedroAzureMLConfig,
-    KedroAzureRunnerConfig,
 )
-from kedro_azureml.constants import KEDRO_AZURE_RUNNER_CONFIG
-from kedro_azureml.datasets import AzureMLAssetDataset, KedroAzureRunnerDataset
-from kedro_azureml.runner import AzurePipelinesRunner
-from kedro_azureml.utils import CliContext
+from kedro_azureml_pipeline.datasets import AzureMLAssetDataset
+from kedro_azureml_pipeline.utils import CliContext
+from tests.scenarios.project_factory import KedroProjectOptions, build_kedro_project_scenario
 from tests.utils import identity
+
+
+@pytest.fixture(autouse=True)
+def _disable_kedro_plugin_entrypoints(monkeypatch):
+    """Prevent system-installed Kedro plugin hooks from loading during tests.
+
+    Reads the project's ``ALLOWED_HOOK_PLUGINS`` setting to determine which
+    plugin distributions (by name) are permitted. All others are filtered out.
+    """
+    _PLUGIN_HOOKS = "kedro.hooks"
+
+    def _wrapped_register(*args, **kwargs):
+        hook_manager = args[0] if args else kwargs.get("hook_manager")
+
+        # Try reading from the Kedro project settings first; fall back to
+        # the test-local settings module when the project is not fully
+        # configured yet (e.g. when only PACKAGE_NAME is patched).
+        proj_allowed = getattr(_kedro_project.settings, "ALLOWED_HOOK_PLUGINS", None)
+        if proj_allowed is None:
+            try:
+                from tests.settings import ALLOWED_HOOK_PLUGINS
+
+                proj_allowed = ALLOWED_HOOK_PLUGINS
+            except (ImportError, AttributeError):
+                proj_allowed = ()
+
+        allowed_set = {str(p).strip() for p in proj_allowed if str(p).strip()}
+
+        if not allowed_set:
+            return hook_manager
+
+        def _filtered_loader(group: str):
+            try:
+                all_entry_points = _ilmd.entry_points()
+                if hasattr(all_entry_points, "select"):
+                    entry_points = list(all_entry_points.select(group=group))
+                else:
+                    entry_points = list(all_entry_points.get(group, []))
+            except Exception:
+                entry_points = []
+
+            for entry_point in entry_points:
+                try:
+                    dist_name = getattr(getattr(entry_point, "dist", None), "name", None)
+                    if dist_name and dist_name in allowed_set:
+                        plugin = entry_point.load()
+                        hook_manager.register(plugin, name=getattr(entry_point, "name", None))
+                except Exception:
+                    continue
+
+            return hook_manager
+
+        hook_manager.load_setuptools_entrypoints = _filtered_loader
+        _filtered_loader(_PLUGIN_HOOKS)
+
+    monkeypatch.setattr(
+        _kedro_session_mod,
+        "_register_hooks_entry_points",
+        _wrapped_register,
+        raising=False,
+    )
+
+
+@pytest.fixture(scope="session")
+def temp_directory(tmpdir_factory):
+    """Session-scoped temporary directory for all test projects."""
+    return tmpdir_factory.mktemp("session_temp_dir")
+
+
+@pytest.fixture(scope="session")
+def project_scenario_factory(temp_directory):
+    """Return a callable that builds Kedro project variants in tmp dirs."""
+
+    def _factory(kedro_project_options: KedroProjectOptions, project_name: str | None = None) -> KedroProjectOptions:
+        return build_kedro_project_scenario(
+            temp_directory=temp_directory, options=kedro_project_options, project_name=project_name
+        )
+
+    return _factory
 
 
 @pytest.fixture()
 def dummy_pipeline() -> Pipeline:
-    return pipeline(
-        [
-            node(identity, inputs="input_data", outputs="i2", name="node1"),
-            node(identity, inputs="i2", outputs="i3", name="node2"),
-            node(identity, inputs="i3", outputs="output_data", name="node3"),
-        ]
-    )
+    """Three-node linear pipeline for basic tests."""
+    return pipeline([
+        node(identity, inputs="input_data", outputs="i2", name="node1"),
+        node(identity, inputs="i2", outputs="i3", name="node2"),
+        node(identity, inputs="i3", outputs="output_data", name="node3"),
+    ])
 
 
 @pytest.fixture()
 def dummy_pipeline_compute_tag() -> Pipeline:
-    return pipeline(
-        [
-            node(
-                identity,
-                inputs="input_data",
-                outputs="i2",
-                name="node1",
-                tags=["compute-2"],
-            ),
-            node(identity, inputs="i2", outputs="i3", name="node2"),
-            node(identity, inputs="i3", outputs="output_data", name="node3"),
-        ]
-    )
+    """Three-node pipeline where node1 has a ``compute-2`` tag."""
+    return pipeline([
+        node(
+            identity,
+            inputs="input_data",
+            outputs="i2",
+            name="node1",
+            tags=["compute-2"],
+        ),
+        node(identity, inputs="i2", outputs="i3", name="node2"),
+        node(identity, inputs="i3", outputs="output_data", name="node3"),
+    ])
 
 
 @pytest.fixture()
 def dummy_pipeline_deterministic_tag() -> Pipeline:
-    return pipeline(
-        [
-            node(
-                identity,
-                inputs="input_data",
-                outputs="i2",
-                name="node1",
-                tags=["deterministic"],
-            ),
-            node(identity, inputs="i2", outputs="i3", name="node2"),
-            node(identity, inputs="i3", outputs="output_data", name="node3"),
-        ]
-    )
+    """Three-node pipeline where node1 has a ``deterministic`` tag."""
+    return pipeline([
+        node(
+            identity,
+            inputs="input_data",
+            outputs="i2",
+            name="node1",
+            tags=["deterministic"],
+        ),
+        node(identity, inputs="i2", outputs="i3", name="node2"),
+        node(identity, inputs="i3", outputs="output_data", name="node3"),
+    ])
 
 
 @pytest.fixture()
 def dummy_plugin_config() -> KedroAzureMLConfig:
+    """Deep copy of the default plugin config template."""
     return _CONFIG_TEMPLATE.model_copy(deep=True)
 
 
 @pytest.fixture()
 def patched_kedro_package():
+    """Patch ``PACKAGE_NAME`` to ``'tests'`` for the Kedro project discovery."""
     with patch("kedro.framework.project.PACKAGE_NAME", "tests") as patched_package:
-        # original_dir = os.getcwd()
-        # os.chdir("tests")
         yield patched_package
-        # os.chdir(original_dir)
 
 
 @pytest.fixture()
 def cli_context() -> CliContext:
+    """Minimal CLI context with ``env='base'``."""
     metadata = MagicMock()
     metadata.package_name = "tests"
     return CliContext("base", metadata)
-
-
-@pytest.fixture()
-def patched_azure_dataset():
-    with TemporaryDirectory() as tmp_dir:
-        target_path = Path(tmp_dir) / (uuid4().hex + ".bin")
-    with patch.object(
-        KedroAzureRunnerDataset,
-        "_get_target_path",
-        return_value=str(target_path.absolute()),
-    ):
-        yield KedroAzureRunnerDataset("", "", "", "unit_tests", uuid4().hex)
-
-
-@pytest.fixture()
-def patched_azure_runner(patched_azure_dataset):
-    backup = os.environ.copy()
-    try:
-        cfg = KedroAzureRunnerConfig(
-            temporary_storage=AzureTempStorageConfig(
-                account_name="unit_test", container="container"
-            ),
-            run_id=uuid4().hex,
-            storage_account_key="",
-        )
-        os.environ[KEDRO_AZURE_RUNNER_CONFIG] = cfg.model_dump_json()
-        yield AzurePipelinesRunner()
-    except Exception:
-        pass
-    os.environ = backup
-
-
-@pytest.fixture()
-def patched_azure_pipeline_data_passing_runner():
-    yield AzurePipelinesRunner(pipeline_data_passing=True)
 
 
 class ExtendedMagicMock(MagicMock):
@@ -130,23 +169,23 @@ class ExtendedMagicMock(MagicMock):
         return {
             "subscription_id": self.subscription_id,
             "resource_group": self.resource_group,
-            "workspace_name": self.workspace_name,
-            "experiment_name": self.experiment_name,
+            "name": self.name,
         }
 
 
 @pytest.fixture
 def mock_azureml_config():
+    """Mock Azure ML workspace config with test subscription/resource values."""
     mock_config = ExtendedMagicMock()
     mock_config.subscription_id = "123"
     mock_config.resource_group = "456"
-    mock_config.workspace_name = "best"
-    mock_config.experiment_name = "test"
+    mock_config.name = "best"
     return mock_config
 
 
 @pytest.fixture
 def simulated_azureml_dataset(tmp_path):
+    """Temporary directory tree mimicking Azure ML data asset layouts."""
     df = pd.DataFrame({"data": [1, 2, 3], "partition_idx": [1, 2, 3]})
 
     test_data_file = tmp_path / "test_file"
@@ -158,9 +197,7 @@ def simulated_azureml_dataset(tmp_path):
 
     df.to_pickle(test_data_nested / "test.pickle")
 
-    test_data_folder_nested_file = (
-        tmp_path / "test_folder_nested_file" / "random" / "subfolder"
-    )
+    test_data_folder_nested_file = tmp_path / "test_folder_nested_file" / "random" / "subfolder"
     test_data_folder_nested_file.mkdir(parents=True)
     df.to_pickle(test_data_folder_nested_file / "test.pickle")
 
@@ -183,9 +220,7 @@ def simulated_azureml_dataset(tmp_path):
     return tmp_path
 
 
-def mock_download_artifact_from_aml_uri_with_dataset(
-    uri, destination, datastore_operation, simulated_dataset_path
-):
+def mock_download_artifact_from_aml_uri_with_dataset(uri, destination, datastore_operation, simulated_dataset_path):
     """Mock function to simulate downloading Azure ML artifacts locally"""
     import shutil
 
@@ -206,19 +241,14 @@ def mock_download_artifact_from_aml_uri_with_dataset(
     # Find the source directory based on URI
     source_folder = None
     for test_uri, folder_name in uri_to_source_map.items():
-        if (
-            test_uri in uri
-        ):  # Use 'in' instead of 'startswith' to handle both folder and file URIs
+        if test_uri in uri:  # Use 'in' instead of 'startswith' to handle both folder and file URIs
             source_folder = simulated_dataset_path / folder_name
             break
 
     # Copy all files from source folder to destination
     if source_folder and source_folder.exists():
         # Special handling for test_folder_nested_file - copy only from the nested subfolder
-        if (
-            "test_folder_nested_file" in str(source_folder)
-            and (source_folder / "random" / "subfolder").exists()
-        ):
+        if "test_folder_nested_file" in str(source_folder) and (source_folder / "random" / "subfolder").exists():
             nested_source = source_folder / "random" / "subfolder"
             for item in nested_source.rglob("*"):
                 if item.is_file():
@@ -237,13 +267,15 @@ def mock_download_artifact_from_aml_uri_with_dataset(
 
 @pytest.fixture
 def mock_azureml_fs(simulated_azureml_dataset):
+    """Patch ``download_artifact_from_aml_uri`` to copy from test fixtures."""
+
     def mock_with_dataset(uri, destination, datastore_operation):
         return mock_download_artifact_from_aml_uri_with_dataset(
             uri, destination, datastore_operation, simulated_azureml_dataset
         )
 
     with patch(
-        "kedro_azureml.datasets.asset_dataset.artifact_utils.download_artifact_from_aml_uri",
+        "kedro_azureml_pipeline.datasets.asset_dataset.artifact_utils.download_artifact_from_aml_uri",
         side_effect=mock_with_dataset,
     ):
         yield
@@ -251,14 +283,13 @@ def mock_azureml_fs(simulated_azureml_dataset):
 
 @pytest.fixture
 def mock_azureml_client(request):
+    """Parametrized mock for ``_get_azureml_client`` returning a data asset."""
     mock_data_asset = MagicMock()
     mock_data_asset.version = "1"
     mock_data_asset.path = request.param["path"]
     mock_data_asset.type = request.param["type"]
 
-    with patch(
-        "kedro_azureml.datasets.asset_dataset._get_azureml_client"
-    ) as mock_get_client:
+    with patch("kedro_azureml_pipeline.datasets.asset_dataset._get_azureml_client") as mock_get_client:
         mock_client = MagicMock()
         mock_client.data.get.return_value = mock_data_asset
 
@@ -273,6 +304,7 @@ def mock_azureml_client(request):
 
 @pytest.fixture
 def in_temp_dir(tmp_path):
+    """Change working directory to a temporary path for the test duration."""
     original_cwd = os.getcwd()
 
     os.chdir(tmp_path)
@@ -284,6 +316,7 @@ def in_temp_dir(tmp_path):
 
 @pytest.fixture
 def multi_catalog():
+    """Catalog with CSV and Parquet ``AzureMLAssetDataset`` entries."""
     csv = AzureMLAssetDataset(
         dataset={
             "type": CSVDataset,
@@ -301,3 +334,25 @@ def multi_catalog():
         version=Version(None, None),
     )
     return DataCatalog({"input_data": csv, "i2": parq})
+
+
+@pytest.fixture
+def factory_catalog():
+    """Catalog with a dataset factory pattern and an explicit AzureMLAssetDataset.
+
+    ``input_data`` resolves via the ``{name}`` factory pattern to a MemoryDataset
+    so it is NOT in ``catalog.filter()``.  ``i2`` is an explicit AzureMLAssetDataset.
+    """
+    from kedro.io.catalog_config_resolver import CatalogConfigResolver
+
+    parq = AzureMLAssetDataset(
+        dataset={
+            "type": ParquetDataset,
+            "filepath": "xyz.parq",
+        },
+        azureml_dataset="test_dataset_2",
+        version=Version(None, None),
+    )
+    resolver = CatalogConfigResolver(config={"{name}": {"type": "kedro.io.MemoryDataset"}})
+    catalog = DataCatalog(datasets={"i2": parq}, config_resolver=resolver)
+    return catalog
