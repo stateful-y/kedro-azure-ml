@@ -29,6 +29,10 @@ jobs:
         kedro_spec: ["kedro>=1.0,<2.0"]
         azureml_spec: ["azure-ai-ml>=1.2,<1.20", "azure-ai-ml>=1.20"]
         with_mlflow: ["False", "True"]
+        exclude:
+          # azure-ai-ml<1.20 uses typing internals incompatible with Python 3.13
+          - python-version: "3.13"
+            azureml_spec: "azure-ai-ml>=1.2,<1.20"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
