@@ -292,8 +292,6 @@ class TestScheduler:
     def test_delete_schedule_not_found_is_noop(self):
         from azure.core.exceptions import ResourceNotFoundError
 
-        from kedro_azureml_pipeline.client import _get_azureml_client
-
         mock_ml_client = MagicMock()
         mock_ml_client.schedules.begin_disable.side_effect = ResourceNotFoundError("not found")
 
@@ -872,6 +870,78 @@ class TestScheduleDeleteCLI:
             assert result.exit_code != 0
             assert "mutually exclusive" in result.output.lower()
 
+    def test_delete_no_jobs_config_errors(
+        self,
+        dummy_plugin_config,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """--delete should error when no jobs section exists in config."""
+        from click.testing import CliRunner
+
+        import kedro_azureml_pipeline.cli.commands as cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+
+        assert dummy_plugin_config.jobs == {}
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["--delete", "-j", "any_job"],
+                obj=cli_context,
+            )
+            assert result.exit_code != 0
+            assert "No 'jobs' section" in result.output
+
+    def test_delete_missing_job_name_errors(
+        self,
+        dummy_plugin_config,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """--delete with a non-existent job name should error."""
+        from click.testing import CliRunner
+
+        import kedro_azureml_pipeline.cli.commands as cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+
+        dummy_plugin_config.jobs = {
+            "real_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["--delete", "-j", "nonexistent"],
+                obj=cli_context,
+            )
+            assert result.exit_code != 0
+            assert "not found" in result.output
+
 
 class TestRunCLI:
     """``kedro azureml run`` CLI integration."""
@@ -1077,3 +1147,18 @@ class TestAzureMLScheduleClient:
             result = schedule_client.create_or_update_schedule(mock_schedule, mock_workspace)
             assert result.name == "test-schedule"
             mock_ml_client.schedules.begin_create_or_update.assert_called_once_with(schedule=mock_schedule)
+
+    def test_delete_schedule_success(self):
+        from kedro_azureml_pipeline.scheduler import AzureMLScheduleClient
+
+        mock_ml_client = MagicMock()
+
+        with patch("kedro_azureml_pipeline.scheduler._get_azureml_client") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ml_client)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            client = AzureMLScheduleClient()
+            client.delete_schedule("my_schedule", MagicMock())
+
+        mock_ml_client.schedules.begin_disable.assert_called_once_with(name="my_schedule")
+        mock_ml_client.schedules.begin_delete.assert_called_once_with(name="my_schedule")

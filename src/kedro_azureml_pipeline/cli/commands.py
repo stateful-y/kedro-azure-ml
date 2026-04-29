@@ -361,7 +361,6 @@ def schedule(
         else:
             click.echo(click.style("Some schedule deletions failed", fg="red"))
             click_context.exit(1)
-        return
 
     params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
 
