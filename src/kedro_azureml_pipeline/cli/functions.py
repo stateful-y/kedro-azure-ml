@@ -492,6 +492,78 @@ def run_jobs(
         return all(results.values())
 
 
+def delete_schedules(
+    ctx: CliContext,
+    job_names: list[str],
+    dry_run: bool,
+    workspace_override: str | None = None,
+) -> bool:
+    """Delete Azure ML schedules for the specified jobs.
+
+    Schedule names match job names (the convention used by
+    ``build_job_schedule``).  No pipeline compilation is performed.
+
+    Parameters
+    ----------
+    ctx : CliContext
+        CLI context containing the Kedro environment and metadata.
+    job_names : list of str
+        Job names whose schedules should be deleted.
+    dry_run : bool
+        Preview mode: print what would happen without calling Azure ML.
+    workspace_override : str or None
+        Named workspace override for all jobs in this batch.
+
+    Returns
+    -------
+    bool
+        ``True`` if all deletions succeeded (or were no-ops).
+    """
+    from kedro_azureml_pipeline.scheduler import AzureMLScheduleClient
+
+    with KedroContextManager(env=ctx.env) as mgr:
+        config = mgr.plugin_config
+
+        if not config.jobs:
+            raise click.ClickException(
+                "No 'jobs' section found in azureml.yml config. Define jobs to use this command."
+            )
+
+        missing = set(job_names) - set(config.jobs.keys())
+        if missing:
+            raise click.ClickException(
+                f"Job(s) not found in config: {', '.join(sorted(missing))}. "
+                f"Available jobs: {', '.join(sorted(config.jobs.keys()))}"
+            )
+
+        schedule_client = AzureMLScheduleClient()
+        results: dict[str, bool] = {}
+
+        for job_name in job_names:
+            try:
+                job_config = config.jobs[job_name]
+                workspace = config.workspace.resolve(workspace_override or job_config.workspace)
+
+                if dry_run:
+                    click.echo(f"[DRY RUN] Would delete schedule '{job_name}'")
+                    results[job_name] = True
+                else:
+                    schedule_client.delete_schedule(job_name, workspace)
+                    click.echo(click.style(f"Schedule '{job_name}' deleted", fg="green"))
+                    results[job_name] = True
+
+            except Exception as e:
+                click.echo(click.style(f"Failed to delete schedule '{job_name}': {e}", fg="red"))
+                logger.exception(f"Error deleting schedule '{job_name}'")
+                results[job_name] = False
+
+        succeeded = sum(1 for v in results.values() if v)
+        failed = sum(1 for v in results.values() if not v)
+        click.echo(f"\nDelete summary: {succeeded} succeeded, {failed} failed (out of {len(results)} schedules)")
+
+        return all(results.values())
+
+
 def schedule_jobs(
     ctx: CliContext,
     aml_env: str | None,

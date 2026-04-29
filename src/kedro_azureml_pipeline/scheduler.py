@@ -186,3 +186,31 @@ class AzureMLScheduleClient:
             ).result()
             logger.info(f"Schedule '{result.name}' created/updated successfully")
             return result
+
+    def delete_schedule(
+        self,
+        name: str,
+        config: WorkspaceConfig,
+    ) -> None:
+        """Disable and delete a schedule from the Azure ML workspace.
+
+        Azure ML requires a schedule to be disabled before it can be
+        deleted.  If the schedule does not exist, a warning is logged
+        and the call is treated as a no-op.
+
+        Parameters
+        ----------
+        name : str
+            Schedule name to delete.
+        config : WorkspaceConfig
+            Workspace configuration for the ``MLClient``.
+        """
+        from azure.core.exceptions import ResourceNotFoundError
+
+        with _get_azureml_client(config) as ml_client:
+            try:
+                ml_client.schedules.begin_disable(name=name).result()
+                ml_client.schedules.begin_delete(name=name).result()
+                logger.info(f"Schedule '{name}' deleted successfully")
+            except ResourceNotFoundError:
+                logger.warning(f"Schedule '{name}' not found, skipping delete")

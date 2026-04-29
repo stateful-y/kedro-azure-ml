@@ -13,6 +13,7 @@ from kedro.framework.startup import ProjectMetadata
 
 from kedro_azureml_pipeline.cli.functions import (
     compile_job_pipelines,
+    delete_schedules,
     dynamic_import_job_schedule_func_from_str,
     parse_extra_env_params,
     parse_runtime_params,
@@ -312,6 +313,12 @@ def run(
     default=False,
     help="Preview what would be scheduled without actually calling Azure ML.",
 )
+@click.option(
+    "--delete",
+    is_flag=True,
+    default=False,
+    help="Delete the specified schedules instead of creating/updating them.",
+)
 @click.pass_obj
 @click.pass_context
 def schedule(
@@ -324,12 +331,37 @@ def schedule(
     env_var: tuple[str],
     load_versions: dict[str, str],
     dry_run: bool,
+    delete: bool,
 ):
     """Create or update persistent Azure ML schedules for named jobs.
 
     Jobs are defined in the 'jobs' section of azureml.yml. Each job must
     have a schedule configured; an error is raised otherwise.
+
+    Use ``--delete`` to remove schedules instead of creating them.
+    ``--delete`` is mutually exclusive with ``--aml-env``.
     """
+    if delete and aml_env:
+        raise click.UsageError("--delete and --aml-env are mutually exclusive.")
+
+    if delete:
+        warn_about_ignore_files()
+        verify_configuration_directory_for_azure(click_context, ctx)
+
+        is_ok = delete_schedules(
+            ctx=ctx,
+            job_names=list(job_names),
+            dry_run=dry_run,
+            workspace_override=workspace_name,
+        )
+
+        if is_ok:
+            click.echo(click.style("All schedules deleted successfully", fg="green"))
+            click_context.exit(0)
+        else:
+            click.echo(click.style("Some schedule deletions failed", fg="red"))
+            click_context.exit(1)
+
     params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
 
     if workspace_name:
