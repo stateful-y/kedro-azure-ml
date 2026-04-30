@@ -536,6 +536,61 @@ class TestScheduleCLI:
             assert "[DRY RUN]" in result.output
             assert "test_job" in result.output
 
+    def test_schedule_dry_run_recurrence(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """--dry-run with a recurrence schedule reports interval and frequency."""
+        from click.testing import CliRunner
+
+        import kedro_azureml_pipeline.cli.commands as cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+
+        dummy_plugin_config.schedules = {
+            "weekly": ScheduleConfig(
+                recurrence=RecurrenceScheduleConfig(frequency="week", interval=2),
+            ),
+        }
+        dummy_plugin_config.jobs = {
+            "test_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+                schedule="weekly",
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["-j", "test_job", "--dry-run"],
+                obj=cli_context,
+            )
+            assert result.exit_code == 0, result.output
+            assert "[DRY RUN]" in result.output
+            assert "recurrence: every 2 week(s)" in result.output
+
     def test_schedule_job_filter(
         self,
         tagged_pipeline,

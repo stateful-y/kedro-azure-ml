@@ -72,7 +72,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         azureml_type: AzureMLDataAssetType = "uri_folder",
         version: Version | None = None,
         azureml_version: str | None = None,
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         super().__init__(
             dataset=dataset,
@@ -92,7 +92,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         # resolution includes the dataset name and version prefix.
         self._download = True
         self._local_run = True
-        self._azureml_config = None
+        self._azureml_config: WorkspaceConfig | None = None
         self._azureml_type = azureml_type
         if self._azureml_type not in get_args(AzureMLDataAssetType):
             raise DatasetError(
@@ -110,7 +110,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
             )
 
     @property
-    def azure_config(self) -> WorkspaceConfig:
+    def azure_config(self) -> WorkspaceConfig | None:
         """Return the Azure ML workspace configuration.
 
         Returns
@@ -132,7 +132,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         self._azureml_config = azure_config
 
     @property
-    def path(self) -> str:
+    def path(self) -> Path:
         """Return the full path to the underlying dataset file.
 
         Returns
@@ -181,6 +181,12 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         dataset_config[self._filepath_arg] = str(self.path)
         return self._dataset_type(**dataset_config)
 
+    def _require_config(self) -> WorkspaceConfig:
+        """Return the Azure ML config or raise if not set."""
+        if self._azureml_config is None:
+            raise DatasetError(f"Azure ML workspace config is not set on dataset '{self}'")
+        return self._azureml_config
+
     def _get_latest_version(self) -> str:
         """Fetch the latest Data Asset version from Azure ML.
 
@@ -195,7 +201,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
             If the Data Asset does not exist.
         """
         try:
-            with _get_azureml_client(config=self._azureml_config) as ml_client:
+            with _get_azureml_client(config=self._require_config()) as ml_client:
                 return ml_client.data.get(self._azureml_dataset, label="latest").version
         except ResourceNotFoundError as exc:
             raise DatasetNotFoundError(f"Did not find Azure ML Data Asset for {self}") from exc
@@ -234,7 +240,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         Data
             Azure ML Data Asset.
         """
-        with _get_azureml_client(config=self._azureml_config) as ml_client:
+        with _get_azureml_client(config=self._require_config()) as ml_client:
             return ml_client.data.get(self._azureml_dataset, version=self._resolve_azureml_version())
 
     def _load(self) -> Any:
@@ -260,7 +266,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
 
             # Use Azure ML SDK native download functionality
             # This avoids the ARM64 compatibility issues with azureml-fsspec
-            with _get_azureml_client(config=self._azureml_config) as ml_client:
+            with _get_azureml_client(config=self._require_config()) as ml_client:
                 logger.info(
                     f"Downloading dataset {self._azureml_dataset} version "
                     f"{self._resolve_azureml_version()} for local execution"

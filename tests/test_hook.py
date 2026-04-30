@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from kedro.config import MissingConfigException
 from kedro.io.core import Version
 from kedro.runner import SequentialRunner
 
@@ -104,6 +105,25 @@ class TestAzureMLLocalRunHook:
         hook.after_catalog_created(catalog)
         assert catalog["mem"].load() == 42
 
+    @pytest.mark.parametrize("exc", [KeyError("azureml"), MissingConfigException("no config")])
+    def test_missing_config_sets_none_and_skips_catalog(self, exc, multi_catalog):
+        """When azureml config is missing, ``azure_config`` is ``None`` and catalog is skipped."""
+        hook = AzureMLLocalRunHook()
+        context_mock = Mock(
+            config_loader=MagicMock(
+                __getitem__=Mock(side_effect=exc),
+                config_patterns={},
+            )
+        )
+        hook.after_context_created(context_mock)
+        assert hook.azure_config is None
+
+        hook.after_catalog_created(multi_catalog)
+        for dataset_name in multi_catalog.filter():
+            dataset = multi_catalog[dataset_name]
+            if isinstance(dataset, AzureMLAssetDataset):
+                assert dataset._azureml_config is None
+
     def test_module_level_singleton_exists(self):
         """The module exports a ready-to-use hook instance."""
         assert isinstance(azureml_local_run_hook, AzureMLLocalRunHook)
@@ -111,6 +131,10 @@ class TestAzureMLLocalRunHook:
 
 class TestPatchAzuremlArtifactBuilder:
     """Tests for ``AzureMLLocalRunHook._patch_azureml_artifact_builder``."""
+
+    def test_patches_real_azureml_builder(self):
+        """Patch runs against the real ``azureml-mlflow`` package without errors."""
+        AzureMLLocalRunHook._patch_azureml_artifact_builder()
 
     def test_wraps_builder_that_lacks_var_keyword(self):
         """The wrapper forwards ``artifact_uri`` and drops extra kwargs."""
@@ -178,12 +202,27 @@ class TestPatchAzuremlArtifactBuilder:
 
     def test_noop_when_mlflow_not_installed(self):
         """Patch is a silent no-op when mlflow is not importable."""
-        with patch.dict("sys.modules", {"mlflow": None}):
+        with patch.dict(
+            "sys.modules",
+            {
+                "mlflow": None,
+                "mlflow.store": None,
+                "mlflow.store.artifact": None,
+                "mlflow.store.artifact.artifact_repository_registry": None,
+            },
+        ):
             AzureMLLocalRunHook._patch_azureml_artifact_builder()
 
     def test_noop_when_azureml_mlflow_not_installed(self):
         """Patch is a silent no-op when azureml-mlflow is not importable."""
-        with patch.dict("sys.modules", {"azureml": None, "azureml.mlflow": None}):
+        with patch.dict(
+            "sys.modules",
+            {
+                "azureml": None,
+                "azureml.mlflow": None,
+                "azureml.mlflow.entry_point_loaders": None,
+            },
+        ):
             AzureMLLocalRunHook._patch_azureml_artifact_builder()
 
     def test_called_during_after_context_created(self, mock_azureml_config):

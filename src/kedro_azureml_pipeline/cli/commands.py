@@ -436,9 +436,9 @@ def execute(
     """Execute a single pipeline node inside Azure ML (internal)."""
     # 1. Run kedro
     parameters = parse_runtime_params(params)
-    azure_inputs = dict(azure_inputs)
-    azure_outputs = dict(azure_outputs)
-    data_paths = {**azure_inputs, **azure_outputs}
+    inputs_map = dict(azure_inputs)
+    outputs_map = dict(azure_outputs)
+    data_paths = {**inputs_map, **outputs_map}
 
     with KedroContextManager(env=ctx.env, runtime_params=parameters) as mgr:
         runner = AzurePipelinesRunner(data_paths=data_paths)

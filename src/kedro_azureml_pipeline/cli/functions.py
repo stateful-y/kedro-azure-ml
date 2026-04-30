@@ -644,11 +644,12 @@ def schedule_jobs(
                 )
 
                 if dry_run:
-                    trigger_desc = (
-                        f"cron: {schedule_cfg.cron.expression}"
-                        if schedule_cfg.cron
-                        else f"recurrence: every {schedule_cfg.recurrence.interval} {schedule_cfg.recurrence.frequency}(s)"
-                    )
+                    if schedule_cfg.cron:
+                        trigger_desc = f"cron: {schedule_cfg.cron.expression}"
+                    else:
+                        rec = schedule_cfg.recurrence
+                        assert rec is not None
+                        trigger_desc = f"recurrence: every {rec.interval} {rec.frequency}(s)"
                     click.echo(
                         f"[DRY RUN] Would create schedule '{job_name}' "
                         f"({trigger_desc}) "

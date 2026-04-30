@@ -3,6 +3,7 @@
 import inspect
 import logging
 
+from kedro.config import MissingConfigException
 from kedro.framework.hooks import hook_impl
 
 from kedro_azureml_pipeline.config import WorkspacesConfig
@@ -67,7 +68,11 @@ class AzureMLLocalRunHook:
         self._patch_azureml_artifact_builder()
         if "azureml" not in context.config_loader.config_patterns:
             context.config_loader.config_patterns.update({"azureml": ["azureml*", "azureml*/**", "**/azureml*"]})
-        self.azure_config = WorkspacesConfig.model_validate(context.config_loader["azureml"]["workspace"]).resolve()
+        try:
+            self.azure_config = WorkspacesConfig.model_validate(context.config_loader["azureml"]["workspace"]).resolve()
+        except (KeyError, MissingConfigException):
+            self.azure_config = None
+            logger.info("kedro-azureml-pipeline: no azureml config found, skipping workspace resolution")
 
     @hook_impl
     def after_catalog_created(self, catalog):
@@ -78,6 +83,8 @@ class AzureMLLocalRunHook:
         catalog : DataCatalog
             Created data catalog.
         """
+        if self.azure_config is None:
+            return
         for dataset_name in catalog.filter():
             dataset = catalog[dataset_name]
             if isinstance(dataset, AzureMLAssetDataset):

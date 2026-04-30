@@ -70,6 +70,28 @@ class TestAzurePipelinesRunner:
         ds = runner.create_default_data_set("my_ds")
         assert isinstance(ds, AzureMLPipelineDataset)
 
+    def test_data_paths_resolves_factory_datasets(self, dummy_pipeline: Pipeline, tmp_path: Path):
+        """Datasets in data_paths that are resolvable via catalog factory patterns
+        should be resolved from the catalog, not replaced with a default pickle dataset."""
+        input_data = ["factory data"]
+        factory_dataset = MemoryDataset(data=input_data)
+
+        catalog = DataCatalog()
+        catalog["input_data"] = MemoryDataset(data=input_data)
+        # Simulate a dataset that the generator wired as an AzureML stream
+        # but is resolvable from the original catalog (e.g. via a factory pattern).
+        # i2 is an intermediate dataset not explicitly in catalog but resolvable.
+        catalog["i2"] = factory_dataset
+
+        runner = AzurePipelinesRunner(
+            data_paths={"i2": str(tmp_path), "i3": str(tmp_path), "output_data": str(tmp_path)}
+        )
+        results = runner.run(dummy_pipeline, catalog)
+
+        # i2 should have been resolved from the catalog (MemoryDataset),
+        # not replaced with a pickle dataset.
+        assert results["output_data"].load() == input_data
+
 
 class TestDatasetPathAdjustments:
     """Tests for root_dir rewiring in the runner."""

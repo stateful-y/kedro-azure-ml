@@ -142,4 +142,5 @@ class KedroContextManager:
         exc_tb : TracebackType or None
             Traceback.
         """
-        self.session.__exit__(exc_type, exc_val, exc_tb)
+        if self.session is not None:
+            self.session.__exit__(exc_type, exc_val, exc_tb)

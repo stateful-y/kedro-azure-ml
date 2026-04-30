@@ -33,7 +33,7 @@ dependencies = [
 mlflow = [
     "azureml-mlflow>=1.42.0",
     "mlflow>=2.0.0",
-    "kedro-mlflow>=1.0.0",
+    "kedro-mlflow>=2.0.0",
 ]
 
 [project.entry-points."kedro.project_commands"]
@@ -212,7 +212,7 @@ omit = [
 precision = 2
 show_missing = true
 skip_covered = false
-fail_under = 1
+fail_under = 100
 include_namespace_packages = true
 
 [tool.coverage.html]
@@ -242,22 +242,19 @@ exclude = ["CHANGELOG.md", "site", "htmlcov", ".nox", ".venv"]
 "CONTRIBUTING.md" = ["MD057"]  # Relative link to docs/ is valid at project level
 
 [tool.ty]
-# Pre-existing type issues in Azure ML SDK integration & Click parameter coercion.
-# TODO: Gradually fix and re-enable these rules.
+# Third-party SDK type stubs (Azure ML, Kedro) have incomplete or incorrect annotations.
 [tool.ty.rules]
-invalid-assignment = "warn"
-invalid-argument-type = "warn"
+call-non-callable = "warn"
+invalid-method-override = "warn"
 invalid-parameter-default = "warn"
 invalid-return-type = "warn"
+invalid-type-form = "warn"
+missing-argument = "warn"
+no-matching-overload = "warn"
+not-subscriptable = "warn"
 unresolved-attribute = "warn"
 unresolved-import = "warn"
-no-matching-overload = "warn"
-invalid-method-override = "warn"
-not-subscriptable = "warn"
-call-non-callable = "warn"
 unsupported-operator = "warn"
-missing-argument = "warn"
-invalid-type-form = "warn"
 
 [tool.commitizen]
 name = "cz_conventional_commits"

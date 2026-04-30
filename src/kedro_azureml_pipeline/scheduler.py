@@ -1,6 +1,7 @@
 """Azure ML schedule creation and management."""
 
 import logging
+from typing import Any
 
 from azure.ai.ml.entities import (
     CronTrigger,
@@ -85,26 +86,27 @@ def build_trigger(config: ScheduleConfig) -> CronTrigger | RecurrenceTrigger:
         return CronTrigger(**kwargs)
 
     rec = config.recurrence
-    kwargs = {
-        "frequency": rec.frequency,
-        "interval": rec.interval,
-        "time_zone": rec.time_zone,
-    }
-    if rec.start_time:
-        kwargs["start_time"] = rec.start_time
-    if rec.end_time:
-        kwargs["end_time"] = rec.end_time
+    assert rec is not None, "ScheduleConfig must have either cron or recurrence set"
+
+    pattern: RecurrencePattern | None = None
     if rec.schedule:
-        pattern_kwargs = {}
+        pattern_kwargs: dict[str, Any] = {}
         if rec.schedule.hours is not None:  # pragma: no branch - RecurrencePattern requires hours
             pattern_kwargs["hours"] = rec.schedule.hours
         if rec.schedule.minutes is not None:  # pragma: no branch - RecurrencePattern requires minutes
             pattern_kwargs["minutes"] = rec.schedule.minutes
         if rec.schedule.week_days is not None:
             pattern_kwargs["week_days"] = rec.schedule.week_days
-        kwargs["schedule"] = RecurrencePattern(**pattern_kwargs)
+        pattern = RecurrencePattern(**pattern_kwargs)
 
-    return RecurrenceTrigger(**kwargs)
+    return RecurrenceTrigger(
+        frequency=rec.frequency,
+        interval=rec.interval,
+        time_zone=rec.time_zone,
+        start_time=rec.start_time,
+        end_time=rec.end_time,
+        schedule=pattern,
+    )
 
 
 def build_job_schedule(
@@ -139,16 +141,13 @@ def build_job_schedule(
     [build_trigger][kedro_azureml_pipeline.scheduler.build_trigger] : Creates the trigger argument.
     [AzureMLScheduleClient][kedro_azureml_pipeline.scheduler.AzureMLScheduleClient] : Submits this schedule.
     """
-    kwargs = {
-        "name": name,
-        "trigger": trigger,
-        "create_job": pipeline_job,
-    }
-    if display_name:
-        kwargs["display_name"] = display_name
-    if description:
-        kwargs["description"] = description
-    return JobSchedule(**kwargs)
+    return JobSchedule(
+        name=name,
+        trigger=trigger,
+        create_job=pipeline_job,
+        display_name=display_name or None,
+        description=description or None,
+    )
 
 
 class AzureMLScheduleClient:

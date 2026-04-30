@@ -101,8 +101,8 @@ class AzureMLPipelineGenerator:
         catalog: DataCatalog,
         aml_env: str | None = None,
         params: str | None = None,
-        extra_env: dict[str, str] = None,
-        load_versions: dict[str, str] = None,
+        extra_env: dict[str, str] | None = None,
+        load_versions: dict[str, str] | None = None,
         filter_options: PipelineFilterOptions | None = None,
         mlflow_run_name: str | None = None,
         experiment_name: str | None = None,
@@ -258,7 +258,7 @@ class AzureMLPipelineGenerator:
         else:
             return (params or self.kedro_params)[param_name]
 
-    def _resolve_azure_environment(self) -> str:
+    def _resolve_azure_environment(self) -> str | None:
         """Return the Azure ML environment name.
 
         Returns

@@ -51,7 +51,7 @@ class AzureMLPipelineDataset(AbstractDataset):
         dataset: str | type[AbstractDataset] | dict[str, Any],
         root_dir: str = "data",
         filepath_arg: str = "filepath",
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         dataset = dataset if isinstance(dataset, dict) else {"type": dataset}
         self._dataset_type, self._dataset_config = parse_dataset_definition(dataset)
@@ -73,7 +73,7 @@ class AzureMLPipelineDataset(AbstractDataset):
             )
 
     @property
-    def path(self) -> str:
+    def path(self) -> Path:
         """Return the full path to the underlying dataset file.
 
         Returns
@@ -84,7 +84,7 @@ class AzureMLPipelineDataset(AbstractDataset):
         return Path(self.root_dir) / Path(self._dataset_config[self._filepath_arg])
 
     @property
-    def _filepath(self) -> str:
+    def _filepath(self) -> Path:
         """Return path for kedro-mlflow compatibility.
 
         Returns

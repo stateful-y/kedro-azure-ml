@@ -423,6 +423,7 @@ class TestAzureMLAssetDataset:
             azureml_dataset="missing_asset",
             version=Version(None, None),
         )
+        ds._azureml_config = MagicMock()
         mock_client = MagicMock()
         mock_client.data.get.side_effect = ResourceNotFoundError("not found")
         mock_ctx = MagicMock()
@@ -444,6 +445,7 @@ class TestAzureMLAssetDataset:
             azureml_dataset="test_ds",
             azureml_version="99",
         )
+        ds._azureml_config = MagicMock()
         ds._download = True
         mock_client = MagicMock()
         mock_client.data.get.side_effect = ResourceNotFoundError("version 99 not found")
@@ -456,6 +458,16 @@ class TestAzureMLAssetDataset:
             pytest.raises(VersionNotFoundError, match="Did not find version 99"),
         ):
             ds._load()
+
+    def test_require_config_raises_when_none(self):
+        """``_require_config`` raises ``DatasetError`` when Azure ML config is not set."""
+        ds = AzureMLAssetDataset(
+            dataset={"type": PickleDataset, "filepath": "test.pickle"},
+            azureml_dataset="test_ds",
+            version=Version(None, None),
+        )
+        with pytest.raises(DatasetError, match="Azure ML workspace config is not set"):
+            ds._require_config()
 
 
 class TestAzureMLPipelineDataset:
