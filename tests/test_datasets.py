@@ -459,6 +459,16 @@ class TestAzureMLAssetDataset:
         ):
             ds._load()
 
+    def test_require_config_raises_when_none(self):
+        """``_require_config`` raises ``DatasetError`` when Azure ML config is not set."""
+        ds = AzureMLAssetDataset(
+            dataset={"type": PickleDataset, "filepath": "test.pickle"},
+            azureml_dataset="test_ds",
+            version=Version(None, None),
+        )
+        with pytest.raises(DatasetError, match="Azure ML workspace config is not set"):
+            ds._require_config()
+
 
 class TestAzureMLPipelineDataset:
     """Tests for ``AzureMLPipelineDataset`` save and load."""

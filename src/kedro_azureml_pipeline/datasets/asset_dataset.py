@@ -182,6 +182,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         return self._dataset_type(**dataset_config)
 
     def _require_config(self) -> WorkspaceConfig:
+        """Return the Azure ML config or raise if not set."""
         if self._azureml_config is None:
             raise DatasetError(f"Azure ML workspace config is not set on dataset '{self}'")
         return self._azureml_config

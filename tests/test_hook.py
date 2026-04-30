@@ -132,6 +132,10 @@ class TestAzureMLLocalRunHook:
 class TestPatchAzuremlArtifactBuilder:
     """Tests for ``AzureMLLocalRunHook._patch_azureml_artifact_builder``."""
 
+    def test_patches_real_azureml_builder(self):
+        """Patch runs against the real ``azureml-mlflow`` package without errors."""
+        AzureMLLocalRunHook._patch_azureml_artifact_builder()
+
     def test_wraps_builder_that_lacks_var_keyword(self):
         """The wrapper forwards ``artifact_uri`` and drops extra kwargs."""
         mock_registry = MagicMock()
@@ -198,12 +202,27 @@ class TestPatchAzuremlArtifactBuilder:
 
     def test_noop_when_mlflow_not_installed(self):
         """Patch is a silent no-op when mlflow is not importable."""
-        with patch.dict("sys.modules", {"mlflow": None}):
+        with patch.dict(
+            "sys.modules",
+            {
+                "mlflow": None,
+                "mlflow.store": None,
+                "mlflow.store.artifact": None,
+                "mlflow.store.artifact.artifact_repository_registry": None,
+            },
+        ):
             AzureMLLocalRunHook._patch_azureml_artifact_builder()
 
     def test_noop_when_azureml_mlflow_not_installed(self):
         """Patch is a silent no-op when azureml-mlflow is not importable."""
-        with patch.dict("sys.modules", {"azureml": None, "azureml.mlflow": None}):
+        with patch.dict(
+            "sys.modules",
+            {
+                "azureml": None,
+                "azureml.mlflow": None,
+                "azureml.mlflow.entry_point_loaders": None,
+            },
+        ):
             AzureMLLocalRunHook._patch_azureml_artifact_builder()
 
     def test_called_during_after_context_created(self, mock_azureml_config):

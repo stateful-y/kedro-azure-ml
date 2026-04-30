@@ -80,3 +80,9 @@ class TestKedroContextManager:
         plain = {"a": 1}
         result = mgr._ensure_obj_is_dict(plain)
         assert result == {"a": 1}
+
+    def test_exit_noop_when_session_is_none(self):
+        """``__exit__`` is a no-op when session was never created."""
+        mgr = KedroContextManager(env="base")
+        assert mgr.session is None
+        mgr.__exit__(None, None, None)
