@@ -428,3 +428,189 @@ class TestSanitizeFunctions:
         result = generator._sanitize_azure_name(name)
         assert result == result.lower()
         assert "." not in result
+
+
+class TestGetKedroParam:
+    """_get_kedro_param resolves dot-separated paths through dicts and objects.
+
+    Kedro 1.3+ allows Pydantic models as parameter values. The generator must
+    traverse both dicts (plain YAML) and objects (Pydantic) when resolving
+    ``params:`` references used in ``@distributed_job`` decorators.
+    """
+
+    def _make_generator(self, kedro_params, dummy_plugin_config, multi_catalog):
+        return AzureMLPipelineGenerator(
+            "test",
+            "local",
+            dummy_plugin_config,
+            kedro_params,
+            catalog=multi_catalog,
+        )
+
+    def test_flat_dict_lookup(self, dummy_plugin_config, multi_catalog):
+        gen = self._make_generator({"num_nodes": 4}, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("num_nodes") == 4
+
+    def test_nested_dict_lookup(self, dummy_plugin_config, multi_catalog):
+        params = {"a": {"b": {"c": 42}}}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("a.b.c") == 42
+
+    def test_pydantic_model_lookup(self, dummy_plugin_config, multi_catalog):
+        """Traverses a Pydantic BaseModel via attribute access."""
+        from pydantic import BaseModel
+
+        class Inner(BaseModel):
+            num_nodes: int = 3
+
+        class Outer(BaseModel):
+            tuning: Inner = Inner()
+
+        params = {"spec": Outer()}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("spec.tuning.num_nodes") == 3
+
+    def test_mixed_dict_and_pydantic(self, dummy_plugin_config, multi_catalog):
+        """Dict at the top level, Pydantic model nested inside."""
+        from pydantic import BaseModel
+
+        class Config(BaseModel):
+            value: int = 7
+
+        params = {"product": {"group": {"variant": {"spec": Config()}}}}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("product.group.variant.spec.value") == 7
+
+    def test_explicit_params_arg(self, dummy_plugin_config, multi_catalog):
+        """Passing an explicit params dict overrides kedro_params."""
+        gen = self._make_generator({"x": 1}, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("y", params={"y": 99}) == 99
+
+    def test_missing_key_raises(self, dummy_plugin_config, multi_catalog):
+        gen = self._make_generator({}, dummy_plugin_config, multi_catalog)
+        with pytest.raises(KeyError):
+            gen._get_kedro_param("missing")
+
+    def test_missing_attr_on_object_raises(self, dummy_plugin_config, multi_catalog):
+        from pydantic import BaseModel
+
+        class Spec(BaseModel):
+            x: int = 1
+
+        gen = self._make_generator({"spec": Spec()}, dummy_plugin_config, multi_catalog)
+        with pytest.raises(AttributeError):
+            gen._get_kedro_param("spec.nonexistent")
+
+    def test_single_level_pydantic_attr(self, dummy_plugin_config, multi_catalog):
+        """Flat lookup on a Pydantic model passed via explicit params."""
+        from pydantic import BaseModel
+
+        class Cfg(BaseModel):
+            n: int = 5
+
+        gen = self._make_generator({}, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("n", params=Cfg()) == 5
+
+    def test_dataclass_attr_lookup(self, dummy_plugin_config, multi_catalog):
+        """Supports plain dataclasses (not only Pydantic)."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class Settings:
+            num_nodes: int = 10
+
+        params = {"settings": Settings()}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("settings.num_nodes") == 10
+
+    def test_deeply_nested_pydantic(self, dummy_plugin_config, multi_catalog):
+        """Four levels of Pydantic nesting."""
+        from pydantic import BaseModel
+
+        class D(BaseModel):
+            val: int = 99
+
+        class C(BaseModel):
+            d: D = D()
+
+        class B(BaseModel):
+            c: C = C()
+
+        class A(BaseModel):
+            b: B = B()
+
+        gen = self._make_generator({"a": A()}, dummy_plugin_config, multi_catalog)
+        assert gen._get_kedro_param("a.b.c.d.val") == 99
+
+
+class TestFromParamsOrValue:
+    """_from_params_or_value resolves params: references or returns literals."""
+
+    def _make_generator(self, kedro_params, dummy_plugin_config, multi_catalog):
+        return AzureMLPipelineGenerator(
+            "test",
+            "local",
+            dummy_plugin_config,
+            kedro_params,
+            catalog=multi_catalog,
+        )
+
+    def test_literal_int(self, dummy_plugin_config, multi_catalog):
+        gen = self._make_generator({}, dummy_plugin_config, multi_catalog)
+        assert gen._from_params_or_value(None, 5, hint="num_nodes") == 5
+
+    def test_params_reference_no_namespace(self, dummy_plugin_config, multi_catalog):
+        gen = self._make_generator({"num_nodes": 8}, dummy_plugin_config, multi_catalog)
+        assert gen._from_params_or_value(None, "params:num_nodes", hint="num_nodes") == 8
+
+    def test_params_reference_with_namespace(self, dummy_plugin_config, multi_catalog):
+        params = {"product": {"group": {"variant": {"spec": {"tuning": {"num_nodes": 3}}}}}}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        result = gen._from_params_or_value(
+            "product.group.variant",
+            "params:spec.tuning.num_nodes",
+            hint="num_nodes",
+        )
+        assert result == 3
+
+    def test_params_reference_with_pydantic_namespace(self, dummy_plugin_config, multi_catalog):
+        """Namespace traversal through Pydantic models (Kedro 1.3 params)."""
+        from pydantic import BaseModel
+
+        class TuningConfig(BaseModel):
+            num_nodes: int = 2
+
+        class VariantSpec(BaseModel):
+            tuning: TuningConfig = TuningConfig()
+
+        params = {"product": {"group": {"variant": {"spec": VariantSpec()}}}}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        result = gen._from_params_or_value(
+            "product.group.variant",
+            "params:spec.tuning.num_nodes",
+            hint="num_nodes",
+        )
+        assert result == 2
+
+    def test_wrong_type_raises(self, dummy_plugin_config, multi_catalog):
+        gen = self._make_generator({}, dummy_plugin_config, multi_catalog)
+        with pytest.raises(ValueError, match="Expected either"):
+            gen._from_params_or_value(None, 3.14, hint="num_nodes")
+
+    def test_bool_is_not_int(self, dummy_plugin_config, multi_catalog):
+        """bool is rejected when expected_value_type is int (strict type() check)."""
+        gen = self._make_generator({}, dummy_plugin_config, multi_catalog)
+        with pytest.raises(ValueError, match="Expected either"):
+            gen._from_params_or_value(None, True, hint="num_nodes")
+
+    def test_params_ref_mixed_pydantic_and_dict(self, dummy_plugin_config, multi_catalog):
+        """Dict at top, Pydantic in middle, dict at bottom."""
+        from pydantic import BaseModel
+
+        class Middle(BaseModel):
+            inner: dict = {"count": 6}
+
+        params = {"ns": {"spec": Middle()}}
+        gen = self._make_generator(params, dummy_plugin_config, multi_catalog)
+        result = gen._from_params_or_value("ns", "params:spec.inner.count", hint="count")
+        assert result == 6

@@ -245,18 +245,29 @@ class AzureMLPipelineGenerator:
         param_name : str
             Dot-separated parameter path.
         params : dict of str to Any or None
-            Nested dict to search (defaults to ``self.kedro_params``).
+            Nested dict or object to search (defaults to ``self.kedro_params``).
+            When the current level is not a ``Mapping``, attribute access is
+            used instead of subscript (e.g. for Pydantic models).
 
         Returns
         -------
         Any
             Resolved parameter value.
         """
+        container = params if params is not None else self.kedro_params
+
+        def _lookup(obj, key):
+            """Subscript *obj* by *key*, falling back to getattr for non-dict objects."""
+            try:
+                return obj[key]
+            except TypeError:
+                return getattr(obj, key)
+
         if "." in param_name:
             name, remainder = param_name.split(".", 1)
-            return self._get_kedro_param(remainder, (params or self.kedro_params)[name])
+            return self._get_kedro_param(remainder, _lookup(container, name))
         else:
-            return (params or self.kedro_params)[param_name]
+            return _lookup(container, param_name)
 
     def _resolve_azure_environment(self) -> str | None:
         """Return the Azure ML environment name.
